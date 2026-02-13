@@ -23,7 +23,7 @@ export default function HomePage() {
         <div className="flex flex-col items-center space-y-3 py-6">
           <h1 className="text-3xl font-extrabold tracking-tight">
             <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              NumeroQuest
+              칸채움
             </span>
           </h1>
           <p className="text-center text-sm text-slate-400">

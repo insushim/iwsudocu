@@ -4,8 +4,21 @@ import { Toaster } from 'react-hot-toast';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'NumeroQuest',
-  description: '매일 새로운 도전, 매일 더 강해지는 두뇌 - NumeroQuest 스도쿠',
+  title: '칸채움 - 두뇌 스도쿠',
+  description: '매일 새로운 도전, 매일 더 강해지는 두뇌. 무한 스도쿠 퍼즐을 즐기세요!',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: '칸채움',
+  },
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export const viewport: Viewport = {
@@ -23,6 +36,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="dark" suppressHydrationWarning>
+      <head>
+        <meta name="theme-color" content="#4F46E5" />
+      </head>
       <body className="antialiased">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
           {children}

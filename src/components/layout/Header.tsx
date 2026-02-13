@@ -23,7 +23,7 @@ export function Header() {
         {/* App name */}
         <h1 className="text-lg font-extrabold tracking-tight">
           <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-            NumeroQuest
+            칸채움
           </span>
         </h1>
 
