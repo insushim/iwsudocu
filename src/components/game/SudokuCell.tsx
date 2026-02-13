@@ -17,6 +17,7 @@ interface SudokuCellProps {
   isSameCol: boolean;
   isSameBox: boolean;
   isConflict: boolean;
+  isErrorHighlight: boolean;
   notes: number[];
   theme: GameTheme;
 }
@@ -32,6 +33,7 @@ const SudokuCell = memo(function SudokuCell({
   isSameCol,
   isSameBox,
   isConflict,
+  isErrorHighlight,
   notes,
   theme,
 }: SudokuCellProps) {
@@ -42,15 +44,17 @@ const SudokuCell = memo(function SudokuCell({
   }, [selectCell, row, col]);
 
   // Determine background color using theme
-  const bgColor = isSelected
-    ? theme.selectedBg
-    : isConflict
-      ? theme.conflictBg
-      : isHighlighted
-        ? theme.highlightBg
-        : isSameRow || isSameCol || isSameBox
-          ? theme.highlightBg + '44'
-          : theme.cellBg;
+  const bgColor = isErrorHighlight
+    ? '#DC2626'
+    : isSelected
+      ? theme.selectedBg
+      : isConflict
+        ? theme.conflictBg
+        : isHighlighted
+          ? theme.highlightBg
+          : isSameRow || isSameCol || isSameBox
+            ? theme.highlightBg + '44'
+            : theme.cellBg;
 
   // Border thicknesses for 3x3 box boundaries
   const isThickRight = col === 2 || col === 5;
@@ -63,6 +67,7 @@ const SudokuCell = memo(function SudokuCell({
       className={cn(
         'relative flex items-center justify-center aspect-square w-full',
         'transition-colors duration-150 outline-none',
+        isErrorHighlight && 'animate-pulse',
         'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400',
         isThickRight ? 'border-r-2' : 'border-r',
         isThickBottom ? 'border-b-2' : 'border-b',
