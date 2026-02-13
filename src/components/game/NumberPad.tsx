@@ -28,7 +28,7 @@ export default function NumberPad() {
   }, [currentBoard]);
 
   return (
-    <div className="flex items-center justify-center gap-1.5 sm:gap-2 w-full max-w-[420px] mx-auto px-1">
+    <div className="flex items-center justify-center gap-1.5 sm:gap-2 w-full max-w-2xl mx-auto px-1">
       {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
         const remaining = remainingCounts[num];
         const isDisabled = remaining <= 0;
@@ -43,8 +43,8 @@ export default function NumberPad() {
             whileTap={{ scale: 0.9 }}
             className={cn(
               'flex flex-col items-center justify-center',
-              'min-w-[36px] min-h-[44px] sm:min-w-[40px] sm:min-h-[48px]',
-              'flex-1 rounded-xl font-bold text-lg sm:text-xl',
+              'min-w-[36px] min-h-[44px] sm:min-w-[44px] sm:min-h-[52px] lg:min-h-[56px]',
+              'flex-1 rounded-xl font-bold text-lg sm:text-xl lg:text-2xl',
               'transition-all duration-150',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
               isActive
@@ -73,7 +73,7 @@ export default function NumberPad() {
         whileTap={{ scale: 0.9 }}
         className={cn(
           'flex flex-col items-center justify-center',
-          'min-w-[36px] min-h-[44px] sm:min-w-[40px] sm:min-h-[48px]',
+          'min-w-[36px] min-h-[44px] sm:min-w-[44px] sm:min-h-[52px] lg:min-h-[56px]',
           'flex-1 rounded-xl',
           'bg-white/10 text-white/70 hover:bg-white/20',
           'transition-all duration-150',

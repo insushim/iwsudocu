@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'react-hot-toast';
+import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -41,6 +42,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+          <ServiceWorkerRegister />
           {children}
           <Toaster
             position="top-center"

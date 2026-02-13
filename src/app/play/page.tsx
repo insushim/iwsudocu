@@ -97,16 +97,16 @@ export default function PlayPage() {
   const isGameActive = status === 'playing' || status === 'paused';
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-dvh flex-col overflow-hidden">
       {/* Game UI */}
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-2 pt-2 pb-4">
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-2 pt-1 pb-2">
         <GameHeader />
         <ComboIndicator />
-        <div className="flex-1 flex items-center justify-center py-2">
+        <div className="flex-1 flex items-center justify-center py-1 min-h-0">
           <SudokuBoard />
         </div>
-        <GameControls />
-        <div className="mt-2">
+        <div className="shrink-0 space-y-1.5 pb-[env(safe-area-inset-bottom)]">
+          <GameControls />
           <NumberPad />
         </div>
       </main>
