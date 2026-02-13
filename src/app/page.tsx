@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Flame, Brain, Gamepad2, Calendar } from 'lucide-react';
+import { Flame, Brain, Gamepad2, Calendar, Printer } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Card } from '@/components/ui/Card';
@@ -49,13 +49,20 @@ export default function HomePage() {
           </Card>
         </Link>
 
-        {/* Quick start button */}
-        <Link href="/play">
-          <Button className="w-full" size="lg">
-            <Gamepad2 className="h-5 w-5" />
-            게임 시작
-          </Button>
-        </Link>
+        {/* Quick start buttons */}
+        <div className="grid grid-cols-4 gap-2">
+          <Link href="/play" className="col-span-3">
+            <Button className="w-full" size="lg">
+              <Gamepad2 className="h-5 w-5" />
+              게임 시작
+            </Button>
+          </Link>
+          <Link href="/print">
+            <Button variant="secondary" className="w-full h-full" size="lg">
+              <Printer className="h-5 w-5" />
+            </Button>
+          </Link>
+        </div>
 
         {/* Current streak and brain score row */}
         <div className="grid grid-cols-2 gap-3">

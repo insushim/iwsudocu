@@ -88,7 +88,7 @@ export default function SudokuBoard() {
   return (
     <div
       className={cn(
-        'grid grid-cols-9 w-full max-w-[min(100vw-2rem,420px)] aspect-square mx-auto',
+        'grid grid-cols-9 w-full max-w-[min(100vw-1rem,calc(100dvh-14rem),560px)] aspect-square mx-auto',
         'rounded-xl border-2 border-indigo-500/60 overflow-hidden',
         'bg-slate-900/80 backdrop-blur-sm shadow-2xl shadow-indigo-500/10',
       )}

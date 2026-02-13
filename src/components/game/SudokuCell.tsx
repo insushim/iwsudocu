@@ -83,7 +83,7 @@ const SudokuCell = memo(function SudokuCell({
             exit={{ scale: 0.5, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 500, damping: 25 }}
             className={cn(
-              'text-base sm:text-lg md:text-xl font-bold select-none leading-none',
+              'text-base sm:text-lg md:text-xl lg:text-2xl font-bold select-none leading-none',
               isGiven ? 'text-slate-400' : 'text-white',
               isConflict && !isGiven && 'text-red-400',
             )}

@@ -70,7 +70,7 @@ export default function GameControls() {
   ];
 
   return (
-    <div className="grid grid-cols-5 gap-2 w-full max-w-[420px] mx-auto px-2">
+    <div className="grid grid-cols-5 gap-2 w-full max-w-2xl mx-auto px-2">
       {controls.map((ctrl) => {
         const Icon = ctrl.icon;
         return (
