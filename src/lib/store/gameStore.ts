@@ -20,6 +20,9 @@ import {
   getComboTier,
 } from '@/lib/game/combo';
 import { soundManager } from '@/lib/audio/soundManager';
+import { hapticLight, hapticMedium, hapticSuccess, hapticError, hapticHeavy } from '@/lib/utils/haptic';
+import { checkCompletions } from '@/lib/game/celebrations';
+import toast from 'react-hot-toast';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -243,6 +246,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { currentBoard } = get();
     const value = currentBoard[row][col];
     soundManager.play('tap');
+    hapticLight();
     set({
       selectedCell: { row, col },
       highlightedNumber: value,
@@ -329,6 +333,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         soundManager.play('correct');
       }
 
+      hapticMedium();
+      hapticSuccess();
+
       set({
         currentBoard: newBoard,
         notes: newNotes,
@@ -339,6 +346,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
         highlightedNumber: num as CellValue,
       });
 
+      // Check for completion celebrations (row/col/box/number)
+      const completions = checkCompletions(newBoard, row, col);
+      for (const c of completions) {
+        if (c.type === 'number') {
+          toast(`숫자 ${c.index} 완성!`, { icon: '🎯' });
+        } else if (c.type === 'row') {
+          toast(`${c.index + 1}행 완성!`, { icon: '✨' });
+        } else if (c.type === 'column') {
+          toast(`${c.index + 1}열 완성!`, { icon: '✨' });
+        } else if (c.type === 'box') {
+          toast('박스 완성!', { icon: '🎉' });
+        }
+      }
+      // Play a special sound for completions
+      if (completions.length > 0) {
+        soundManager.play('dailyComplete');
+      }
+
       // Check if game is complete
       get().checkCompletion();
     } else {
@@ -347,6 +372,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const newCombo = resetCombo();
 
       soundManager.play('wrong');
+      hapticMedium();
+      hapticError();
       if (combo.current > 0) {
         soundManager.play('comboBreak');
       }
@@ -636,6 +663,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     if (complete) {
       soundManager.play('complete');
+      hapticHeavy();
 
       const result = get().getGameResult();
       set({

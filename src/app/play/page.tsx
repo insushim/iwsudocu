@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/store/gameStore';
 import { useUserStore } from '@/lib/store/userStore';
@@ -18,6 +18,7 @@ import { Header } from '@/components/layout/Header';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { XCircle, Home, RotateCcw } from 'lucide-react';
+import { bgmManager } from '@/lib/audio/bgmManager';
 import type { Difficulty } from '@/types';
 
 export default function PlayPage() {
@@ -31,6 +32,22 @@ export default function PlayPage() {
   // Hooks
   useTimer();
   useKeyboard();
+
+  // BGM: start when playing, stop when done or leaving
+  const musicEnabled = useUserStore((s) => s.profile.settings.musicEnabled);
+
+  useEffect(() => {
+    if (status === 'playing' && musicEnabled) {
+      bgmManager.setEnabled(true);
+      bgmManager.play();
+    } else if (status === 'completed' || status === 'failed' || status === 'idle') {
+      bgmManager.stop();
+    }
+
+    return () => {
+      bgmManager.stop();
+    };
+  }, [status, musicEnabled]);
 
   const handleSelectDifficulty = useCallback(
     (difficulty: Difficulty) => {

@@ -3,11 +3,16 @@
   "short_name": "칸채움",
   "description": "매일 새로운 도전, 매일 더 강해지는 두뇌. 무한 스도쿠 퍼즐을 즐기세요!",
   "start_url": "/",
+  "scope": "/",
+  "id": "/",
   "display": "standalone",
   "background_color": "#0F172A",
   "theme_color": "#4F46E5",
   "orientation": "portrait",
   "lang": "ko",
+  "dir": "ltr",
+  "categories": ["games", "education"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon.svg",
@@ -26,6 +31,26 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "게임 시작",
+      "short_name": "플레이",
+      "url": "/play",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "오늘의 도전",
+      "short_name": "데일리",
+      "url": "/daily",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "프린트",
+      "short_name": "인쇄",
+      "url": "/print",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

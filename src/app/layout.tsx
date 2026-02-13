@@ -39,6 +39,15 @@ export default function RootLayout({
     <html lang="ko" className="dark" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#4F46E5" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="칸채움" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192.png" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="msapplication-TileColor" content="#4F46E5" />
+        <meta name="msapplication-tap-highlight" content="no" />
+        <meta name="format-detection" content="telephone=no" />
       </head>
       <body className="antialiased">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>

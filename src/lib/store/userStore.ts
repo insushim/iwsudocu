@@ -15,6 +15,7 @@ import { updateStreak, getStreakMultiplier, getStreakMilestoneReward } from '@/l
 import { ALL_ACHIEVEMENTS, checkAchievements } from '@/lib/game/achievements';
 import { calculateBrainScore } from '@/lib/game/brainScore';
 import { soundManager } from '@/lib/audio/soundManager';
+import { bgmManager } from '@/lib/audio/bgmManager';
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -451,6 +452,11 @@ export const useUserStore = create<UserStore>()(
           // Sync sound setting with sound manager
           if (settings.soundEnabled !== undefined) {
             soundManager.setEnabled(settings.soundEnabled);
+          }
+
+          // Sync music setting with BGM manager
+          if (settings.musicEnabled !== undefined) {
+            bgmManager.setEnabled(settings.musicEnabled);
           }
 
           return {
