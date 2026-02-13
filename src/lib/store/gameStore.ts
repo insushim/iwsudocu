@@ -390,6 +390,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       // Check if game failed
       if (newMistakes >= maxMistakes) {
+        soundManager.play('wrong');
+        hapticHeavy();
         set({ status: 'failed' });
       }
     }
@@ -536,6 +538,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (action.newNotes) {
       newNotes[action.row][action.col] = new Set(action.newNotes);
     }
+
+    soundManager.play('tap');
 
     set({
       currentBoard: newBoard,
