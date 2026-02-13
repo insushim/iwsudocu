@@ -13,9 +13,17 @@ export default function SudokuBoard() {
   const selectedCell = useGameStore((s) => s.selectedCell);
   const highlightedNumber = useGameStore((s) => s.highlightedNumber);
   const notes = useGameStore((s) => s.notes);
+  const errorHighlights = useGameStore((s) => s.errorHighlights);
   const highlightSameNumbers = useUserStore((s) => s.profile.settings.highlightSameNumbers);
   const activeThemeId = useUserStore((s) => s.profile.activeTheme);
   const theme = useMemo(() => GAME_THEMES.find((t) => t.id === activeThemeId) ?? GAME_THEMES[0], [activeThemeId]);
+
+  // Pre-compute error highlight set for O(1) lookups
+  const errorSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of errorHighlights) s.add(`${e.row}-${e.col}`);
+    return s;
+  }, [errorHighlights]);
 
   // Pre-compute which cells are given
   const givenBoard = useMemo(() => {
@@ -64,6 +72,7 @@ export default function SudokuBoard() {
           Math.floor(selectedCell.col / 3) === Math.floor(c / 3) &&
           !isSelected;
         const isConflict = conflicts[r][c];
+        const isErrorHighlight = errorSet.has(`${r}-${c}`);
         const cellNotes = notes[r][c] ? Array.from(notes[r][c]) : [];
 
         items.push(
@@ -79,6 +88,7 @@ export default function SudokuBoard() {
             isSameCol={isSameCol}
             isSameBox={isSameBox}
             isConflict={isConflict}
+            isErrorHighlight={isErrorHighlight}
             notes={cellNotes}
             theme={theme}
           />,
@@ -87,7 +97,7 @@ export default function SudokuBoard() {
     }
 
     return items;
-  }, [currentBoard, givenBoard, selectedCell, highlightedNumber, highlightSameNumbers, conflicts, notes, theme]);
+  }, [currentBoard, givenBoard, selectedCell, highlightedNumber, highlightSameNumbers, conflicts, errorSet, notes, theme]);
 
   return (
     <div

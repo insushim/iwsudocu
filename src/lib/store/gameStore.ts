@@ -111,6 +111,7 @@ export interface GameStore {
   // --- Power-up state ---
   timerFrozenUntil: number;
   comboBoostUntil: number;
+  errorHighlights: { row: number; col: number }[];
 
   // --- Actions ---
   startNewGame: (difficulty: Difficulty) => void;
@@ -178,6 +179,7 @@ function getInitialState() {
     maxCombo: 0,
     timerFrozenUntil: 0,
     comboBoostUntil: 0,
+    errorHighlights: [],
   };
 }
 
@@ -334,8 +336,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // Auto-remove this number from notes in same row/col/box
       newNotes = removeNoteFromPeers(newNotes, row, col, num);
 
-      // Update combo
-      const newCombo = updateComboOnCorrect(combo, Date.now());
+      // Update combo (with boost if active)
+      let newCombo = updateComboOnCorrect(combo, Date.now());
+      if (get().comboBoostUntil > Date.now()) {
+        newCombo = { ...newCombo, multiplier: newCombo.multiplier * 2 };
+      }
       const newMaxCombo = Math.max(maxCombo, newCombo.current);
 
       // Play combo sound
@@ -789,11 +794,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { puzzle, currentBoard, status } = get();
     if (!puzzle || status !== 'playing') return;
 
-    let errorCount = 0;
+    const errors: { row: number; col: number }[] = [];
     for (let r = 0; r < 9; r++) {
       for (let c = 0; c < 9; c++) {
         if (currentBoard[r][c] !== 0 && currentBoard[r][c] !== puzzle.solution[r][c]) {
-          errorCount++;
+          errors.push({ row: r, col: c });
         }
       }
     }
@@ -801,10 +806,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     soundManager.play('hint');
     hapticMedium();
 
-    if (errorCount === 0) {
+    if (errors.length === 0) {
       toast('오류가 없습니다! 잘하고 있어요!', { icon: '✅' });
     } else {
-      toast(`${errorCount}개의 오류가 있습니다.`, { icon: '❌' });
+      toast(`${errors.length}개의 오류가 발견되었습니다!`, { icon: '❌' });
+      set({ errorHighlights: errors });
+      // Clear highlights after 3 seconds
+      setTimeout(() => {
+        set({ errorHighlights: [] });
+      }, 3000);
     }
   },
 
