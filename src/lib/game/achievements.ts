@@ -43,7 +43,7 @@ export const ALL_ACHIEVEMENTS: Omit<Achievement, 'progress' | 'isUnlocked' | 'un
   { id: 'level_50', name: 'Elite', nameKo: '엘리트', description: 'Reach Level 50', descriptionKo: '레벨 50 달성', icon: '🏆', category: 'mastery', requirement: 50, xpReward: 5000, coinReward: 2500, rarity: 'legendary' },
 ];
 
-export function checkAchievements(stats: UserStats, currentAchievements: Achievement[]): Achievement[] {
+export function checkAchievements(stats: UserStats, currentAchievements: Achievement[], level?: number): Achievement[] {
   return currentAchievements.map(ach => {
     if (ach.isUnlocked) return ach;
 
@@ -81,7 +81,7 @@ export function checkAchievements(stats: UserStats, currentAchievements: Achieve
         progress = stats.brainScore;
         break;
       case 'level_10': case 'level_25': case 'level_50':
-        progress = 0; // checked externally
+        progress = level ?? 0;
         break;
       default:
         break;

@@ -16,6 +16,7 @@ import { ALL_ACHIEVEMENTS, checkAchievements } from '@/lib/game/achievements';
 import { calculateBrainScore } from '@/lib/game/brainScore';
 import { soundManager } from '@/lib/audio/soundManager';
 import { bgmManager } from '@/lib/audio/bgmManager';
+import { setHapticEnabled } from '@/lib/utils/haptic';
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -396,9 +397,10 @@ export const useUserStore = create<UserStore>()(
         // 3. Recalculate brain score
         stats.brainScore = calculateBrainScore(stats);
 
-        // 4. Check achievements
+        // 4. Check achievements (pass estimated new level for level-based achievements)
         const prevAchievements = profile.achievements;
-        const updatedAchievements = checkAchievements(stats, prevAchievements);
+        const estimatedLevel = calculateLevel(profile.totalXP + earnedXP).level;
+        const updatedAchievements = checkAchievements(stats, prevAchievements, estimatedLevel);
 
         // 5. Find newly unlocked achievements and award bonuses
         const newlyUnlocked: Achievement[] = [];
@@ -457,6 +459,11 @@ export const useUserStore = create<UserStore>()(
           // Sync music setting with BGM manager
           if (settings.musicEnabled !== undefined) {
             bgmManager.setEnabled(settings.musicEnabled);
+          }
+
+          // Sync vibration setting with haptic module
+          if (settings.vibrationEnabled !== undefined) {
+            setHapticEnabled(settings.vibrationEnabled);
           }
 
           return {
@@ -581,6 +588,13 @@ export const useUserStore = create<UserStore>()(
     {
       name: 'numero-quest-user',
       storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          soundManager.setEnabled(state.profile.settings.soundEnabled);
+          bgmManager.setEnabled(state.profile.settings.musicEnabled);
+          setHapticEnabled(state.profile.settings.vibrationEnabled);
+        }
+      },
     },
   ),
 );
