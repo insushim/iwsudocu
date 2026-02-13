@@ -57,6 +57,9 @@ export default function PlayPage() {
       resultRecorded.current = true;
       const result = getGameResult();
       if (result) {
+        const puzzleId = useGameStore.getState().puzzle?.id ?? '';
+        const isDaily = puzzleId.startsWith('daily-');
+
         recordGameResult({
           difficulty: result.difficulty,
           timeInSeconds: result.timeInSeconds,
@@ -64,10 +67,13 @@ export default function PlayPage() {
           hintsUsed: result.hintsUsed,
           maxCombo: result.maxCombo,
           totalScore: result.totalScore,
+          isDaily,
         });
         recordStreak();
 
         const playerName = useUserStore.getState().profile.displayName;
+        const today = new Date();
+        const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
         fetch('/api/leaderboard', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -79,7 +85,8 @@ export default function PlayPage() {
             mistakes: result.mistakes,
             max_combo: result.maxCombo,
             is_perfect: result.mistakes === 0 ? 1 : 0,
-            is_daily: 0,
+            is_daily: isDaily ? 1 : 0,
+            daily_date: isDaily ? dateStr : undefined,
           }),
         }).catch(() => { /* silently fail for offline */ });
       }
