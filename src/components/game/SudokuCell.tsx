@@ -44,7 +44,7 @@ const SudokuCell = memo(function SudokuCell({
     : isConflict
       ? 'bg-red-500/30'
       : isHighlighted
-        ? 'bg-blue-500/20'
+        ? 'bg-blue-500/8'
         : isSameRow || isSameCol || isSameBox
           ? 'bg-white/5'
           : 'bg-transparent';

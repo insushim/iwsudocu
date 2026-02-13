@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { useGameStore } from '@/lib/store/gameStore';
+import { useUserStore } from '@/lib/store/userStore';
 import { cn } from '@/lib/utils/cn';
 import SudokuCell from './SudokuCell';
 
@@ -11,6 +12,7 @@ export default function SudokuBoard() {
   const selectedCell = useGameStore((s) => s.selectedCell);
   const highlightedNumber = useGameStore((s) => s.highlightedNumber);
   const notes = useGameStore((s) => s.notes);
+  const highlightSameNumbers = useUserStore((s) => s.profile.settings.highlightSameNumbers);
 
   // Pre-compute which cells are given
   const givenBoard = useMemo(() => {
@@ -50,7 +52,7 @@ export default function SudokuBoard() {
           selectedCell.row === r &&
           selectedCell.col === c;
         const isHighlighted =
-          highlightedNumber !== 0 && value === highlightedNumber && !isSelected;
+          highlightSameNumbers && highlightedNumber !== 0 && value === highlightedNumber && !isSelected;
         const isSameRow = selectedCell !== null && selectedCell.row === r && !isSelected;
         const isSameCol = selectedCell !== null && selectedCell.col === c && !isSelected;
         const isSameBox =
