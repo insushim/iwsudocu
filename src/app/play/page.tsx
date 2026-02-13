@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/store/gameStore';
 import { useUserStore } from '@/lib/store/userStore';
@@ -49,6 +49,46 @@ export default function PlayPage() {
     };
   }, [status, musicEnabled]);
 
+  // Record game result immediately on completion (not on modal button click)
+  const resultRecorded = useRef(false);
+
+  useEffect(() => {
+    if (status === 'completed' && !resultRecorded.current) {
+      resultRecorded.current = true;
+      const result = getGameResult();
+      if (result) {
+        recordGameResult({
+          difficulty: result.difficulty,
+          timeInSeconds: result.timeInSeconds,
+          mistakes: result.mistakes,
+          hintsUsed: result.hintsUsed,
+          maxCombo: result.maxCombo,
+          totalScore: result.totalScore,
+        });
+        recordStreak();
+
+        const playerName = useUserStore.getState().profile.displayName;
+        fetch('/api/leaderboard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            player_name: playerName,
+            score: result.totalScore,
+            difficulty: result.difficulty,
+            time_seconds: result.timeInSeconds,
+            mistakes: result.mistakes,
+            max_combo: result.maxCombo,
+            is_perfect: result.mistakes === 0 ? 1 : 0,
+            is_daily: 0,
+          }),
+        }).catch(() => { /* silently fail for offline */ });
+      }
+    }
+    if (status === 'idle') {
+      resultRecorded.current = false;
+    }
+  }, [status, getGameResult, recordGameResult, recordStreak]);
+
   const handleSelectDifficulty = useCallback(
     (difficulty: Difficulty) => {
       startNewGame(difficulty);
@@ -56,37 +96,7 @@ export default function PlayPage() {
     [startNewGame]
   );
 
-  const handleGameComplete = useCallback(() => {
-    const result = getGameResult();
-    if (result) {
-      recordGameResult({
-        difficulty: result.difficulty,
-        timeInSeconds: result.timeInSeconds,
-        mistakes: result.mistakes,
-        hintsUsed: result.hintsUsed,
-        maxCombo: result.maxCombo,
-        totalScore: result.totalScore,
-      });
-      recordStreak();
-
-      // Submit to leaderboard API
-      const playerName = useUserStore.getState().profile.displayName;
-      fetch('/api/leaderboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          player_name: playerName,
-          score: result.totalScore,
-          difficulty: result.difficulty,
-          time_seconds: result.timeInSeconds,
-          mistakes: result.mistakes,
-          max_combo: result.maxCombo,
-          is_perfect: result.mistakes === 0 ? 1 : 0,
-          is_daily: 0,
-        }),
-      }).catch(() => { /* silently fail for offline */ });
-    }
-  }, [getGameResult, recordGameResult, recordStreak]);
+  // handleGameComplete is now handled by the useEffect above
 
   const handleNewGame = useCallback(() => {
     const difficulty = useGameStore.getState().difficulty;
@@ -131,17 +141,9 @@ export default function PlayPage() {
       {/* Completed modal */}
       <GameCompleteModal
         isOpen={status === 'completed'}
-        onClose={() => {
-          handleGameComplete();
-        }}
-        onNewGame={() => {
-          handleGameComplete();
-          handleNewGame();
-        }}
-        onGoHome={() => {
-          handleGameComplete();
-          handleGoHome();
-        }}
+        onClose={handleGoHome}
+        onNewGame={handleNewGame}
+        onGoHome={handleGoHome}
       />
 
       {/* Failed modal */}

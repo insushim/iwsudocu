@@ -24,9 +24,10 @@ function pad(n: number): string {
 }
 
 export function DailyCountdown() {
-  const [time, setTime] = useState(getTimeUntilMidnight);
+  const [time, setTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
 
   useEffect(() => {
+    setTime(getTimeUntilMidnight());
     const interval = setInterval(() => {
       setTime(getTimeUntilMidnight());
     }, 1000);
