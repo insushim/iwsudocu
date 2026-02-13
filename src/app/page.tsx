@@ -1,65 +1,121 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import Link from 'next/link';
+import { Flame, Brain, Gamepad2, Calendar } from 'lucide-react';
+import { Header } from '@/components/layout/Header';
+import { BottomNav } from '@/components/layout/BottomNav';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { useUserStore } from '@/lib/store/userStore';
+import { calculateBrainScore, getBrainScoreGrade } from '@/lib/game/brainScore';
+
+export default function HomePage() {
+  const profile = useUserStore((s) => s.profile);
+  const brainScore = calculateBrainScore(profile.stats);
+  const grade = getBrainScoreGrade(brainScore);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen pb-24 pt-16">
+      <Header />
+
+      <main className="mx-auto max-w-lg space-y-6 px-4 pt-4">
+        {/* Hero */}
+        <div className="flex flex-col items-center space-y-3 py-6">
+          <h1 className="text-3xl font-extrabold tracking-tight">
+            <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+              NumeroQuest
+            </span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-center text-sm text-slate-400">
+            매일 새로운 도전, 매일 더 강해지는 두뇌
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Daily challenge banner */}
+        <Link href="/daily">
+          <Card className="relative overflow-hidden bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border-indigo-500/20 hover:border-indigo-500/40 transition-all">
+            <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-indigo-500/10" />
+            <div className="relative flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/20">
+                <Calendar className="h-6 w-6 text-indigo-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">오늘의 도전</p>
+                <p className="text-xs text-slate-400">
+                  매일 새로운 퍼즐에 도전하세요
+                </p>
+              </div>
+            </div>
+          </Card>
+        </Link>
+
+        {/* Quick start button */}
+        <Link href="/play">
+          <Button className="w-full" size="lg">
+            <Gamepad2 className="h-5 w-5" />
+            게임 시작
+          </Button>
+        </Link>
+
+        {/* Current streak and brain score row */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Streak banner */}
+          <Card className="flex flex-col items-center py-4">
+            <Flame className="h-6 w-6 text-orange-400" />
+            <span className="mt-1 text-2xl font-extrabold text-orange-400 font-number">
+              {profile.streak.currentStreak}
+            </span>
+            <span className="text-xs text-slate-400">일 연속</span>
+            {profile.streak.currentStreak > 0 && (
+              <span className="mt-1 text-[10px] text-slate-500">
+                최장: {profile.streak.longestStreak}일
+              </span>
+            )}
+          </Card>
+
+          {/* Brain score mini widget */}
+          <Card className="flex flex-col items-center py-4">
+            <Brain className="h-6 w-6" style={{ color: grade.color }} />
+            <span
+              className="mt-1 text-2xl font-extrabold font-number"
+              style={{ color: grade.color }}
+            >
+              {brainScore}
+            </span>
+            <span className="text-xs text-slate-400">두뇌 점수</span>
+            <span
+              className="mt-1 text-[10px] font-bold"
+              style={{ color: grade.color }}
+            >
+              {grade.grade} - {grade.labelKo}
+            </span>
+          </Card>
+        </div>
+
+        {/* Stats summary */}
+        <div className="grid grid-cols-3 gap-2">
+          <Card className="flex flex-col items-center py-3">
+            <span className="text-lg font-bold text-white font-number">
+              {profile.stats.totalGamesWon}
+            </span>
+            <span className="text-[10px] text-slate-400">승리</span>
+          </Card>
+          <Card className="flex flex-col items-center py-3">
+            <span className="text-lg font-bold text-white font-number">
+              {Math.round(profile.stats.winRate)}%
+            </span>
+            <span className="text-[10px] text-slate-400">승률</span>
+          </Card>
+          <Card className="flex flex-col items-center py-3">
+            <span className="text-lg font-bold text-white font-number">
+              {profile.stats.maxCombo}
+            </span>
+            <span className="text-[10px] text-slate-400">최대 콤보</span>
+          </Card>
         </div>
       </main>
+
+      <BottomNav />
     </div>
   );
 }
