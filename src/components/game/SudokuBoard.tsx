@@ -83,7 +83,7 @@ export default function SudokuBoard() {
     }
 
     return items;
-  }, [currentBoard, givenBoard, selectedCell, highlightedNumber, conflicts, notes]);
+  }, [currentBoard, givenBoard, selectedCell, highlightedNumber, highlightSameNumbers, conflicts, notes]);
 
   return (
     <div

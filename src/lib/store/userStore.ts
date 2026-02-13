@@ -8,7 +8,6 @@ import {
   PowerUp,
   StreakData,
   Difficulty,
-  GameTheme,
 } from '@/types';
 import { calculateLevel } from '@/lib/game/leveling';
 import { updateStreak, getStreakMultiplier, getStreakMilestoneReward } from '@/lib/game/streak';
