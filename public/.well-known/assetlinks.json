@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.kanchaeum.sudoku",
+    "sha256_cert_fingerprints": [
+      "E9:96:56:4B:B7:8E:63:95:77:3B:F5:68:F2:87:8C:34:A7:62:FB:41:B4:E6:1E:02:C7:BE:78:E3:82:FA:40:A3"
+    ]
+  }
+}]
