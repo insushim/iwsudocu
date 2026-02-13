@@ -1,81 +1,70 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { LeaderboardTable } from '@/components/leaderboard/LeaderboardTable';
 import { cn } from '@/lib/utils/cn';
 import type { LeaderboardEntry, LeaderboardPeriod, PlayerTier } from '@/types';
 
-const PERIOD_TABS: { key: LeaderboardPeriod; label: string }[] = [
-  { key: 'daily', label: '일간' },
-  { key: 'weekly', label: '주간' },
-  { key: 'monthly', label: '월간' },
-  { key: 'alltime', label: '전체' },
+const DIFFICULTY_TABS = [
+  { key: 'all', label: '전체' },
+  { key: 'easy', label: '쉬움' },
+  { key: 'medium', label: '보통' },
+  { key: 'hard', label: '어려움' },
+  { key: 'expert', label: '전문가' },
+  { key: 'master', label: '마스터' },
 ];
 
-// Sample leaderboard data
-function generateSampleData(period: LeaderboardPeriod): LeaderboardEntry[] {
-  const names = [
-    '스도쿠마스터',
-    '논리왕',
-    '퍼즐천재',
-    '두뇌전사',
-    '넘버킹',
-    '집중의달인',
-    '수학천재',
-    '도전자',
-    '빠른손가락',
-    '열정가득',
-    '퍼즐러',
-    '브레인',
-    '숫자왕',
-    '전략가',
-    '분석마스터',
-  ];
-
-  const tiers: PlayerTier[] = [
-    'grandmaster',
-    'master',
-    'diamond',
-    'diamond',
-    'platinum',
-    'platinum',
-    'gold',
-    'gold',
-    'gold',
-    'silver',
-    'silver',
-    'silver',
-    'bronze',
-    'bronze',
-    'bronze',
-  ];
-
-  const baseScores: Record<LeaderboardPeriod, number> = {
-    daily: 3000,
-    weekly: 15000,
-    monthly: 50000,
-    alltime: 200000,
-  };
-
-  return names.map((name, i) => ({
-    rank: i + 1,
-    userId: `user-${i}`,
-    displayName: name,
-    score: Math.max(
-      100,
-      baseScores[period] - i * Math.floor(baseScores[period] * 0.06)
-    ),
-    time: 180 + i * 35,
-    level: Math.max(1, 50 - i * 3),
-    tier: tiers[i],
-  }));
+function tierFromScore(score: number): PlayerTier {
+  if (score >= 10000) return 'grandmaster';
+  if (score >= 7000) return 'master';
+  if (score >= 5000) return 'diamond';
+  if (score >= 3000) return 'platinum';
+  if (score >= 2000) return 'gold';
+  if (score >= 1000) return 'silver';
+  return 'bronze';
 }
 
 export default function LeaderboardPage() {
-  const [activePeriod, setActivePeriod] = useState<LeaderboardPeriod>('daily');
-  const entries = generateSampleData(activePeriod);
+  const [activeDifficulty, setActiveDifficulty] = useState('all');
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchLeaderboard = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: '50' });
+      if (activeDifficulty !== 'all') {
+        params.set('difficulty', activeDifficulty);
+      }
+      const res = await fetch(`/api/leaderboard?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        const mapped: LeaderboardEntry[] = (data.entries || []).map(
+          (e: { player_name: string; score: number; time_seconds: number; id: number }, i: number) => ({
+            rank: i + 1,
+            userId: `db-${e.id}`,
+            displayName: e.player_name,
+            score: e.score,
+            time: e.time_seconds,
+            level: Math.max(1, Math.floor(e.score / 200)),
+            tier: tierFromScore(e.score) as PlayerTier,
+          })
+        );
+        setEntries(mapped);
+      }
+    } catch {
+      // Fallback to empty
+      setEntries([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeDifficulty]);
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
 
   return (
     <div className="min-h-screen pb-24 pt-16">
@@ -84,15 +73,15 @@ export default function LeaderboardPage() {
       <main className="mx-auto max-w-lg space-y-4 px-4 pt-4">
         <h2 className="text-lg font-bold text-white">리더보드</h2>
 
-        {/* Period tabs */}
-        <div className="flex gap-1.5 rounded-xl bg-white/5 p-1">
-          {PERIOD_TABS.map((tab) => (
+        {/* Difficulty tabs */}
+        <div className="flex gap-1 overflow-x-auto rounded-xl bg-white/5 p-1 no-scrollbar">
+          {DIFFICULTY_TABS.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActivePeriod(tab.key)}
+              onClick={() => setActiveDifficulty(tab.key)}
               className={cn(
-                'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
-                activePeriod === tab.key
+                'shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+                activeDifficulty === tab.key
                   ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25'
                   : 'text-slate-400 hover:text-white'
               )}
@@ -102,8 +91,13 @@ export default function LeaderboardPage() {
           ))}
         </div>
 
-        {/* Table */}
-        <LeaderboardTable entries={entries} period={activePeriod} />
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <LeaderboardTable entries={entries} period={'alltime' as LeaderboardPeriod} />
+        )}
       </main>
 
       <BottomNav />
