@@ -1,0 +1,8 @@
+name = "numero-quest"
+compatibility_date = "2024-12-01"
+pages_build_output_dir = "out"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "numero-quest-db"
+database_id = "03445a91-176c-457a-95ce-63b42ab505c7"

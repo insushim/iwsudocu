@@ -51,6 +51,23 @@ export default function PlayPage() {
         totalScore: result.totalScore,
       });
       recordStreak();
+
+      // Submit to leaderboard API
+      const playerName = useUserStore.getState().profile.displayName;
+      fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          player_name: playerName,
+          score: result.totalScore,
+          difficulty: result.difficulty,
+          time_seconds: result.timeInSeconds,
+          mistakes: result.mistakes,
+          max_combo: result.maxCombo,
+          is_perfect: result.mistakes === 0 ? 1 : 0,
+          is_daily: 0,
+        }),
+      }).catch(() => { /* silently fail for offline */ });
     }
   }, [getGameResult, recordGameResult, recordStreak]);
 
