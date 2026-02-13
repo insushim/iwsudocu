@@ -58,6 +58,7 @@ export default function GameCompleteModal({
 
   const [visibleLines, setVisibleLines] = useState(0);
   const confettiFired = useRef(false);
+  const animationStarted = useRef(false);
 
   const result = gameResult();
 
@@ -89,6 +90,7 @@ export default function GameCompleteModal({
 
     if (!isOpen) {
       confettiFired.current = false;
+      animationStarted.current = false;
       setVisibleLines(0);
     }
   }, [isOpen]);
@@ -106,21 +108,24 @@ export default function GameCompleteModal({
     : [];
 
   useEffect(() => {
-    if (!isOpen || !result) return;
+    if (!isOpen || !result || animationStarted.current) return;
 
-    let timer: NodeJS.Timeout;
+    animationStarted.current = true;
+    const timers: NodeJS.Timeout[] = [];
+
     const reveal = (index: number) => {
       if (index <= scoreLines.length) {
         setVisibleLines(index);
-        timer = setTimeout(() => reveal(index + 1), 200);
+        timers.push(setTimeout(() => reveal(index + 1), 200));
       }
     };
 
-    // Start revealing after a short delay
-    timer = setTimeout(() => reveal(1), 500);
+    timers.push(setTimeout(() => reveal(1), 500));
 
-    return () => clearTimeout(timer);
-  }, [isOpen, result, scoreLines.length]);
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+  }, [isOpen, scoreLines.length, result]);
 
   const handleNewGame = useCallback(() => {
     onNewGame();
