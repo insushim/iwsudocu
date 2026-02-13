@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useGameStore } from '@/lib/store/gameStore';
 import { useUserStore } from '@/lib/store/userStore';
 import { cn } from '@/lib/utils/cn';
+import { GAME_THEMES } from '@/lib/utils/constants';
 import SudokuCell from './SudokuCell';
 
 export default function SudokuBoard() {
@@ -13,6 +14,8 @@ export default function SudokuBoard() {
   const highlightedNumber = useGameStore((s) => s.highlightedNumber);
   const notes = useGameStore((s) => s.notes);
   const highlightSameNumbers = useUserStore((s) => s.profile.settings.highlightSameNumbers);
+  const activeThemeId = useUserStore((s) => s.profile.activeTheme);
+  const theme = useMemo(() => GAME_THEMES.find((t) => t.id === activeThemeId) ?? GAME_THEMES[0], [activeThemeId]);
 
   // Pre-compute which cells are given
   const givenBoard = useMemo(() => {
@@ -77,21 +80,26 @@ export default function SudokuBoard() {
             isSameBox={isSameBox}
             isConflict={isConflict}
             notes={cellNotes}
+            theme={theme}
           />,
         );
       }
     }
 
     return items;
-  }, [currentBoard, givenBoard, selectedCell, highlightedNumber, highlightSameNumbers, conflicts, notes]);
+  }, [currentBoard, givenBoard, selectedCell, highlightedNumber, highlightSameNumbers, conflicts, notes, theme]);
 
   return (
     <div
       className={cn(
         'grid grid-cols-9 w-full max-w-[min(100vw-1rem,calc(100dvh-14rem),560px)] aspect-square mx-auto',
-        'rounded-xl border-2 border-indigo-500/60 overflow-hidden',
-        'bg-slate-900/80 backdrop-blur-sm shadow-2xl shadow-indigo-500/10',
+        'rounded-xl border-2 overflow-hidden backdrop-blur-sm shadow-2xl',
       )}
+      style={{
+        backgroundColor: theme.boardBg,
+        borderColor: theme.accentColor + '99',
+        boxShadow: `0 25px 50px -12px ${theme.accentColor}1a`,
+      }}
     >
       {cells}
     </div>

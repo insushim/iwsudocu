@@ -267,6 +267,7 @@ export interface UserStats {
   longestStreak: number;
   puzzlesByDifficulty: Record<Difficulty, number>;
   averageTimes: Record<Difficulty, number>;
+  perfectGamesByDifficulty: Record<Difficulty, number>;
   winRate: number;
   brainScore: number;
 }

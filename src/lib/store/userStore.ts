@@ -16,6 +16,7 @@ import { calculateBrainScore } from '@/lib/game/brainScore';
 import { soundManager } from '@/lib/audio/soundManager';
 import { bgmManager } from '@/lib/audio/bgmManager';
 import { setHapticEnabled } from '@/lib/utils/haptic';
+import { useGameStore } from '@/lib/store/gameStore';
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -49,6 +50,14 @@ const DEFAULT_STATS: UserStats = {
     master: 0,
   },
   averageTimes: {
+    beginner: 0,
+    easy: 0,
+    medium: 0,
+    hard: 0,
+    expert: 0,
+    master: 0,
+  },
+  perfectGamesByDifficulty: {
     beginner: 0,
     easy: 0,
     medium: 0,
@@ -376,6 +385,10 @@ export const useUserStore = create<UserStore>()(
         // Perfect game
         if (result.mistakes === 0 && result.hintsUsed === 0) {
           stats.perfectGames += 1;
+          stats.perfectGamesByDifficulty = {
+            ...stats.perfectGamesByDifficulty,
+            [result.difficulty]: (stats.perfectGamesByDifficulty[result.difficulty] || 0) + 1,
+          };
         }
 
         // Daily challenge
@@ -525,7 +538,30 @@ export const useUserStore = create<UserStore>()(
           },
         }));
 
-        soundManager.play('powerup');
+        // Execute the power-up effect via gameStore
+        const gameState = useGameStore.getState();
+        switch (powerUpId) {
+          case 'reveal_cell':
+            gameState.revealCell();
+            break;
+          case 'check_board':
+            gameState.checkBoardErrors();
+            break;
+          case 'freeze_timer':
+            gameState.freezeTimer();
+            break;
+          case 'combo_boost':
+            gameState.activateComboBoost();
+            break;
+          case 'undo_mistake':
+            gameState.undoMistake();
+            break;
+          case 'streak_freeze':
+            // Streak freeze just adds to the count, handled by streak system
+            soundManager.play('powerup');
+            break;
+        }
+
         return true;
       },
 

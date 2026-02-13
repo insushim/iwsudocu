@@ -69,10 +69,10 @@ export function checkAchievements(stats: UserStats, currentAchievements: Achieve
         progress = stats.perfectGames;
         break;
       case 'perfect_hard':
-        progress = stats.puzzlesByDifficulty.hard > 0 && stats.perfectGames > 0 ? 1 : 0;
+        progress = (stats.perfectGamesByDifficulty?.hard ?? 0) >= 1 ? 1 : 0;
         break;
       case 'perfect_master':
-        progress = stats.puzzlesByDifficulty.master > 0 && stats.perfectGames > 0 ? 1 : 0;
+        progress = (stats.perfectGamesByDifficulty?.master ?? 0) >= 1 ? 1 : 0;
         break;
       case 'daily_1': case 'daily_7': case 'daily_30': case 'daily_100': case 'daily_bonus_all':
         progress = stats.dailyChallengesCompleted;
