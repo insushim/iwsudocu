@@ -4,6 +4,7 @@ import { memo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils/cn';
 import { useGameStore } from '@/lib/store/gameStore';
+import type { GameTheme } from '@/types';
 
 interface SudokuCellProps {
   row: number;
@@ -17,6 +18,7 @@ interface SudokuCellProps {
   isSameBox: boolean;
   isConflict: boolean;
   notes: number[];
+  theme: GameTheme;
 }
 
 const SudokuCell = memo(function SudokuCell({
@@ -31,6 +33,7 @@ const SudokuCell = memo(function SudokuCell({
   isSameBox,
   isConflict,
   notes,
+  theme,
 }: SudokuCellProps) {
   const selectCell = useGameStore((s) => s.selectCell);
 
@@ -38,26 +41,20 @@ const SudokuCell = memo(function SudokuCell({
     selectCell(row, col);
   }, [selectCell, row, col]);
 
-  // Determine background color (priority: selected > conflict > highlighted > sameRow/Col/Box)
-  const bgClass = isSelected
-    ? 'bg-blue-500/40'
+  // Determine background color using theme
+  const bgColor = isSelected
+    ? theme.selectedBg
     : isConflict
-      ? 'bg-red-500/30'
+      ? theme.conflictBg
       : isHighlighted
-        ? 'bg-blue-500/8'
+        ? theme.highlightBg
         : isSameRow || isSameCol || isSameBox
-          ? 'bg-white/5'
-          : 'bg-transparent';
+          ? theme.highlightBg + '44'
+          : theme.cellBg;
 
   // Border thicknesses for 3x3 box boundaries
-  const borderRight =
-    col === 2 || col === 5
-      ? 'border-r-2 border-r-indigo-400/50'
-      : 'border-r border-r-slate-700/50';
-  const borderBottom =
-    row === 2 || row === 5
-      ? 'border-b-2 border-b-indigo-400/50'
-      : 'border-b border-b-slate-700/50';
+  const isThickRight = col === 2 || col === 5;
+  const isThickBottom = row === 2 || row === 5;
 
   return (
     <button
@@ -67,11 +64,15 @@ const SudokuCell = memo(function SudokuCell({
         'relative flex items-center justify-center aspect-square w-full',
         'transition-colors duration-150 outline-none',
         'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400',
-        bgClass,
-        borderRight,
-        borderBottom,
+        isThickRight ? 'border-r-2' : 'border-r',
+        isThickBottom ? 'border-b-2' : 'border-b',
         isSelected && 'ring-2 ring-inset ring-blue-400',
       )}
+      style={{
+        backgroundColor: bgColor,
+        borderRightColor: isThickRight ? theme.accentColor + '80' : theme.borderColor + '80',
+        borderBottomColor: isThickBottom ? theme.accentColor + '80' : theme.borderColor + '80',
+      }}
       aria-label={`Cell row ${row + 1} column ${col + 1}${value ? `, value ${value}` : ', empty'}`}
     >
       <AnimatePresence mode="popLayout">
@@ -82,11 +83,14 @@ const SudokuCell = memo(function SudokuCell({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.5, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-            className={cn(
-              'text-base sm:text-lg md:text-xl lg:text-2xl font-bold select-none leading-none',
-              isGiven ? 'text-slate-400' : 'text-white',
-              isConflict && !isGiven && 'text-red-400',
-            )}
+            className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold select-none leading-none"
+            style={{
+              color: isConflict && !isGiven
+                ? '#f87171'
+                : isGiven
+                  ? theme.givenColor
+                  : theme.inputColor,
+            }}
           >
             {value}
           </motion.span>
@@ -101,12 +105,12 @@ const SudokuCell = memo(function SudokuCell({
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
               <span
                 key={n}
-                className={cn(
-                  'flex items-center justify-center text-[7px] sm:text-[8px] md:text-[9px] leading-none select-none',
-                  notes.includes(n)
-                    ? 'text-blue-300/80'
-                    : 'text-transparent',
-                )}
+                className="flex items-center justify-center text-[7px] sm:text-[8px] md:text-[9px] leading-none select-none"
+                style={{
+                  color: notes.includes(n)
+                    ? theme.accentColor + 'cc'
+                    : 'transparent',
+                }}
               >
                 {n}
               </span>

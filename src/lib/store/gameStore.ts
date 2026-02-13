@@ -108,6 +108,10 @@ export interface GameStore {
   combo: ComboState;
   maxCombo: number;
 
+  // --- Power-up state ---
+  timerFrozenUntil: number;
+  comboBoostUntil: number;
+
   // --- Actions ---
   startNewGame: (difficulty: Difficulty) => void;
   startDailyChallenge: () => void;
@@ -124,6 +128,13 @@ export interface GameStore {
   useHint: () => void;
   tick: () => void;
   checkCompletion: () => boolean;
+
+  // --- Power-up actions ---
+  revealCell: () => void;
+  checkBoardErrors: () => void;
+  freezeTimer: () => void;
+  activateComboBoost: () => void;
+  undoMistake: () => void;
   getGameResult: () => {
     difficulty: Difficulty;
     timeInSeconds: number;
@@ -165,6 +176,8 @@ function getInitialState() {
     difficulty: 'medium' as Difficulty,
     combo: createInitialComboState(),
     maxCombo: 0,
+    timerFrozenUntil: 0,
+    comboBoostUntil: 0,
   };
 }
 
@@ -623,12 +636,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // -----------------------------------------------------------------------
 
   tick: () => {
-    const { status, startTime, combo } = get();
+    const { status, startTime, combo, timerFrozenUntil } = get();
 
     if (status !== 'playing') return;
 
     const now = Date.now();
-    const elapsed = Math.floor((now - startTime) / 1000);
+
+    // If timer is frozen, advance startTime to keep elapsed the same
+    if (timerFrozenUntil > now) {
+      set({ startTime: startTime + 1000 });
+      // Still process combo decay below
+    }
+
+    const elapsed = Math.floor((now - (timerFrozenUntil > now ? startTime + 1000 : startTime)) / 1000);
 
     // Decay combo timer
     let newCombo = { ...combo };
@@ -704,5 +724,120 @@ export const useGameStore = create<GameStore>((set, get) => ({
       maxCombo,
       ...scoreResult,
     };
+  },
+
+  // -----------------------------------------------------------------------
+  // Power-up actions
+  // -----------------------------------------------------------------------
+
+  revealCell: () => {
+    const { puzzle, currentBoard, notes, status, history, historyIndex } = get();
+    if (!puzzle || status !== 'playing') return;
+
+    // Find all empty cells
+    const emptyCells: { row: number; col: number }[] = [];
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (currentBoard[r][c] === 0 && puzzle.board[r][c] === 0) {
+          emptyCells.push({ row: r, col: c });
+        }
+      }
+    }
+    if (emptyCells.length === 0) return;
+
+    // Pick a random empty cell
+    const target = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    const value = puzzle.solution[target.row][target.col];
+    const prevNotesList = Array.from(notes[target.row][target.col]);
+
+    const action: GameAction = {
+      type: 'hint',
+      row: target.row,
+      col: target.col,
+      prevValue: 0 as CellValue,
+      newValue: value,
+      prevNotes: prevNotesList,
+      newNotes: [],
+      timestamp: Date.now(),
+    };
+    const newHistory = [...history.slice(0, historyIndex + 1), action];
+
+    const newBoard = cloneBoard(currentBoard);
+    newBoard[target.row][target.col] = value;
+
+    let newNotes = cloneNotes(notes);
+    newNotes[target.row][target.col].clear();
+    newNotes = removeNoteFromPeers(newNotes, target.row, target.col, value);
+
+    soundManager.play('hint');
+    hapticSuccess();
+    toast('셀이 공개되었습니다!', { icon: '🔍' });
+
+    set({
+      currentBoard: newBoard,
+      notes: newNotes,
+      history: newHistory,
+      historyIndex: newHistory.length - 1,
+      selectedCell: target,
+      highlightedNumber: value,
+    });
+
+    get().checkCompletion();
+  },
+
+  checkBoardErrors: () => {
+    const { puzzle, currentBoard, status } = get();
+    if (!puzzle || status !== 'playing') return;
+
+    let errorCount = 0;
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (currentBoard[r][c] !== 0 && currentBoard[r][c] !== puzzle.solution[r][c]) {
+          errorCount++;
+        }
+      }
+    }
+
+    soundManager.play('hint');
+    hapticMedium();
+
+    if (errorCount === 0) {
+      toast('오류가 없습니다! 잘하고 있어요!', { icon: '✅' });
+    } else {
+      toast(`${errorCount}개의 오류가 있습니다.`, { icon: '❌' });
+    }
+  },
+
+  freezeTimer: () => {
+    const { status } = get();
+    if (status !== 'playing') return;
+
+    soundManager.play('powerup');
+    hapticSuccess();
+    toast('30초 동안 타이머가 정지됩니다!', { icon: '❄️' });
+
+    set({ timerFrozenUntil: Date.now() + 30000 });
+  },
+
+  activateComboBoost: () => {
+    const { status } = get();
+    if (status !== 'playing') return;
+
+    soundManager.play('powerup');
+    hapticSuccess();
+    toast('60초 동안 콤보 배율 2배!', { icon: '🚀' });
+
+    set({ comboBoostUntil: Date.now() + 60000 });
+  },
+
+  undoMistake: () => {
+    const { mistakes, status } = get();
+    if (status !== 'playing' || mistakes <= 0) return;
+
+    soundManager.play('powerup');
+    hapticSuccess();
+    toast('실수 1회가 취소되었습니다!', { icon: '⏪' });
+
+    set({ mistakes: mistakes - 1 });
   },
 }));
