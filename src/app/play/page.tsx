@@ -32,9 +32,13 @@ export default function PlayPage() {
   const recordGameResult = useUserStore((s) => s.recordGameResult);
   const recordStreak = useUserStore((s) => s.recordStreak);
 
-  // Show resume dialog when entering with an in-progress game
+  // On mount: if game was completed/failed, reset to idle for fresh start
   const [showResumeDialog, setShowResumeDialog] = useState(() => {
     const s = useGameStore.getState().status;
+    if (s === 'completed' || s === 'failed') {
+      useGameStore.getState().resetToIdle();
+      return false;
+    }
     return s === 'playing' || s === 'paused';
   });
 
@@ -115,6 +119,7 @@ export default function PlayPage() {
   // handleGameComplete is now handled by the useEffect above
 
   const handleNewGame = useCallback(() => {
+    resultRecorded.current = false;
     const difficulty = useGameStore.getState().difficulty;
     startNewGame(difficulty);
   }, [startNewGame]);
