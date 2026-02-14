@@ -50,24 +50,27 @@ export default function HomePage() {
         </Link>
 
         {/* Quick start buttons */}
-        <div className="grid grid-cols-8 gap-2">
-          <Link href="/play" className="col-span-5">
+        <div className="space-y-2">
+          <Link href="/play">
             <Button className="w-full" size="lg">
               <Gamepad2 className="h-5 w-5" />
               게임 시작
             </Button>
           </Link>
-          <Link href="/help" className="col-span-2">
-            <Button variant="secondary" className="w-full h-full" size="lg">
-              <HelpCircle className="h-5 w-5" />
-              도움말
-            </Button>
-          </Link>
-          <Link href="/print">
-            <Button variant="secondary" className="w-full h-full" size="lg">
-              <Printer className="h-5 w-5" />
-            </Button>
-          </Link>
+          <div className="grid grid-cols-2 gap-2">
+            <Link href="/help">
+              <Button variant="secondary" className="w-full" size="lg">
+                <HelpCircle className="h-5 w-5" />
+                도움말
+              </Button>
+            </Link>
+            <Link href="/print">
+              <Button variant="secondary" className="w-full" size="lg">
+                <Printer className="h-5 w-5" />
+                인쇄하기
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Current streak and brain score row */}
