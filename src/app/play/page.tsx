@@ -121,12 +121,14 @@ export default function PlayPage() {
   const handleNewGame = useCallback(() => {
     resultRecorded.current = false;
     const difficulty = useGameStore.getState().difficulty;
+    resetToIdle();
     startNewGame(difficulty);
-  }, [startNewGame]);
+  }, [startNewGame, resetToIdle]);
 
   const handleGoHome = useCallback(() => {
+    resetToIdle();
     router.push('/');
-  }, [router]);
+  }, [router, resetToIdle]);
 
   const handleResume = useCallback(() => {
     setShowResumeDialog(false);

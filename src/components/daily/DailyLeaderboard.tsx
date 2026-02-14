@@ -26,8 +26,7 @@ export function DailyLeaderboard() {
     async function fetchLeaderboard() {
       try {
         const today = getTodayStr();
-        // Try daily entries first
-        let res = await fetch(`/api/leaderboard?type=daily&date=${today}&limit=10`);
+        const res = await fetch(`/api/leaderboard?type=daily&date=${today}&limit=10`);
         if (res.ok) {
           const data = await res.json();
           if (data.entries && data.entries.length > 0) {
@@ -41,24 +40,7 @@ export function DailyLeaderboard() {
                 })
               )
             );
-            setLoading(false);
-            return;
           }
-        }
-        // Fallback to overall top scores
-        res = await fetch('/api/leaderboard?limit=10');
-        if (res.ok) {
-          const data = await res.json();
-          setEntries(
-            (data.entries || []).map(
-              (e: { player_name: string; score: number; time_seconds: number }, i: number) => ({
-                rank: i + 1,
-                name: e.player_name,
-                score: e.score,
-                time: e.time_seconds,
-              })
-            )
-          );
         }
       } catch {
         // Offline - show empty
