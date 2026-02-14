@@ -31,6 +31,8 @@ function MiniBoard({
   highlight?: [number, number][];
   notes?: { row: number; col: number; values: number[] }[];
 }) {
+  const size = cells.length;
+  const boxSize = size === 9 ? 3 : 2;
   const highlightSet = new Set(
     (highlight ?? []).map(([r, c]) => `${r}-${c}`),
   );
@@ -39,20 +41,29 @@ function MiniBoard({
     noteMap.set(`${n.row}-${n.col}`, n.values);
   }
 
+  const cellPx = size === 9 ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm';
+
   return (
-    <div className="inline-grid grid-cols-4 border-2 border-indigo-400/60 rounded-lg overflow-hidden w-fit">
+    <div
+      className={cn(
+        'inline-grid border-2 border-indigo-400/60 rounded-lg overflow-hidden w-fit',
+        size === 9 ? 'grid-cols-9' : 'grid-cols-4',
+      )}
+    >
       {cells.flatMap((row, r) =>
         row.map((val, c) => {
           const isHL = highlightSet.has(`${r}-${c}`);
           const cellNotes = noteMap.get(`${r}-${c}`);
+          const isBoxRight = c % boxSize === boxSize - 1 && c !== size - 1;
+          const isBoxBottom = r % boxSize === boxSize - 1 && r !== size - 1;
           return (
             <div
               key={`${r}-${c}`}
               className={cn(
-                'w-9 h-9 flex items-center justify-center text-sm font-bold',
+                cellPx, 'flex items-center justify-center font-bold',
                 'border-r border-b border-white/10',
-                c === 1 && 'border-r-2 border-r-indigo-400/40',
-                r === 1 && 'border-b-2 border-b-indigo-400/40',
+                isBoxRight && 'border-r-2 border-r-indigo-400/40',
+                isBoxBottom && 'border-b-2 border-b-indigo-400/40',
                 isHL
                   ? 'bg-indigo-500/30 text-indigo-300'
                   : val
@@ -61,14 +72,14 @@ function MiniBoard({
               )}
             >
               {cellNotes ? (
-                <div className="grid grid-cols-2 gap-0 w-full h-full p-px">
-                  {[1, 2, 3, 4].map((n) => (
+                <div className="grid grid-cols-3 gap-0 w-full h-full p-px">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
                     <span
                       key={n}
                       className={cn(
-                        'flex items-center justify-center text-[8px]',
+                        'flex items-center justify-center text-[6px]',
                         cellNotes.includes(n)
-                          ? 'text-blue-400'
+                          ? 'text-sky-400'
                           : 'text-transparent',
                       )}
                     >
@@ -227,21 +238,25 @@ export default function HelpPage() {
           <div className="flex justify-center pt-2">
             <MiniBoard
               cells={[
-                [1, 2, 3, 4],
-                [3, 4, 1, 2],
-                [2, 1, 4, 3],
-                [4, 3, 2, 1],
+                [5, 3, null, null, 7, null, null, null, null],
+                [6, null, null, 1, 9, 5, null, null, null],
+                [null, 9, 8, null, null, null, null, 6, null],
+                [8, null, null, null, 6, null, null, null, 3],
+                [4, null, null, 8, null, 3, null, null, 1],
+                [7, null, null, null, 2, null, null, null, 6],
+                [null, 6, null, null, null, null, 2, 8, null],
+                [null, null, null, 4, 1, 9, null, null, 5],
+                [null, null, null, null, 8, null, null, 7, 9],
               ]}
               highlight={[
-                [0, 0],
-                [0, 1],
-                [0, 2],
-                [0, 3],
+                [0, 0], [0, 1], [0, 2],
+                [1, 0], [1, 1], [1, 2],
+                [2, 0], [2, 1], [2, 2],
               ]}
             />
           </div>
           <p className="text-center text-xs text-slate-500">
-            하이라이트된 행: 1, 2, 3, 4가 하나씩!
+            하이라이트된 영역 = 3x3 박스 (각 박스에 1~9가 하나씩!)
           </p>
         </Section>
 
@@ -315,19 +330,24 @@ export default function HelpPage() {
               <div className="flex justify-center mt-3">
                 <MiniBoard
                   cells={[
-                    [1, null, 3, null],
-                    [null, null, null, null],
-                    [null, null, null, null],
-                    [null, null, null, null],
+                    [5, 3, null, null, 7, null, null, null, null],
+                    [6, null, null, 1, 9, 5, null, null, null],
+                    [null, 9, 8, null, null, null, null, 6, null],
+                    [8, null, null, null, 6, null, null, null, 3],
+                    [4, null, null, 8, null, 3, null, null, 1],
+                    [7, null, null, null, 2, null, null, null, 6],
+                    [null, 6, null, null, null, null, 2, 8, null],
+                    [null, null, null, 4, 1, 9, null, null, 5],
+                    [null, null, null, null, 8, null, null, 7, 9],
                   ]}
                   notes={[
-                    { row: 0, col: 1, values: [2, 4] },
-                    { row: 0, col: 3, values: [2, 4] },
+                    { row: 0, col: 2, values: [1, 2, 4] },
+                    { row: 0, col: 3, values: [2, 6] },
                   ]}
                 />
               </div>
               <p className="text-center text-xs text-slate-500 mt-1">
-                &quot;여기 2 또는 4가 올 수 있겠다&quot; → 메모!
+                빈 칸에 작은 숫자 = 메모 (후보 숫자를 적어둔 것)
               </p>
             </div>
 

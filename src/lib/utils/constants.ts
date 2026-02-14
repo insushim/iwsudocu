@@ -10,7 +10,7 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
 };
 
 export const GAME_THEMES: GameTheme[] = [
-  { id: 'default', name: 'Midnight', nameKo: '미드나이트', boardBg: '#1E293B', cellBg: '#0F172A', selectedBg: '#3B82F6', highlightBg: '#1E3A5F', conflictBg: '#7F1D1D', givenColor: '#94A3B8', inputColor: '#E2E8F0', borderColor: '#334155', accentColor: '#6366F1', isUnlocked: true, cost: 0, preview: '🌙' },
+  { id: 'default', name: 'Midnight', nameKo: '미드나이트', boardBg: '#1E293B', cellBg: '#0F172A', selectedBg: '#3B82F6', highlightBg: '#1E3A5F', conflictBg: '#7F1D1D', givenColor: '#CBD5E1', inputColor: '#FFFFFF', borderColor: '#334155', accentColor: '#6366F1', isUnlocked: true, cost: 0, preview: '🌙' },
   { id: 'ocean', name: 'Deep Ocean', nameKo: '심해', boardBg: '#0C4A6E', cellBg: '#082F49', selectedBg: '#0EA5E9', highlightBg: '#0C4A6E', conflictBg: '#7F1D1D', givenColor: '#7DD3FC', inputColor: '#E0F2FE', borderColor: '#0369A1', accentColor: '#38BDF8', isUnlocked: false, cost: 200, preview: '🌊' },
   { id: 'forest', name: 'Enchanted Forest', nameKo: '마법의 숲', boardBg: '#14532D', cellBg: '#052E16', selectedBg: '#22C55E', highlightBg: '#166534', conflictBg: '#7F1D1D', givenColor: '#86EFAC', inputColor: '#DCFCE7', borderColor: '#15803D', accentColor: '#4ADE80', isUnlocked: false, cost: 200, preview: '🌲' },
   { id: 'sunset', name: 'Golden Sunset', nameKo: '황금 석양', boardBg: '#431407', cellBg: '#27150A', selectedBg: '#F97316', highlightBg: '#7C2D12', conflictBg: '#7F1D1D', givenColor: '#FDBA74', inputColor: '#FFF7ED', borderColor: '#9A3412', accentColor: '#FB923C', isUnlocked: false, cost: 300, preview: '🌅' },
