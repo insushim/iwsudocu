@@ -88,7 +88,7 @@ const SudokuCell = memo(function SudokuCell({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.5, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-            className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold select-none leading-none"
+            className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold select-none leading-none"
             style={{
               color: isConflict && !isGiven
                 ? '#f87171'
@@ -110,10 +110,10 @@ const SudokuCell = memo(function SudokuCell({
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
               <span
                 key={n}
-                className="flex items-center justify-center text-[7px] sm:text-[8px] md:text-[9px] leading-none select-none"
+                className="flex items-center justify-center text-[9px] sm:text-[10px] md:text-[11px] font-semibold leading-none select-none"
                 style={{
                   color: notes.includes(n)
-                    ? theme.accentColor + 'cc'
+                    ? '#7DD3FC'
                     : 'transparent',
                 }}
               >
