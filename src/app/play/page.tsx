@@ -139,7 +139,7 @@ export default function PlayPage() {
         <div className="flex-1 flex items-center justify-center py-1 min-h-0">
           <SudokuBoard />
         </div>
-        <div className="shrink-0 space-y-1.5 pb-[env(safe-area-inset-bottom)]">
+        <div className="shrink-0 space-y-1.5 pb-2 mb-[env(safe-area-inset-bottom)]">
           <GameControls />
           <NumberPad />
         </div>
