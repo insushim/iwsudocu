@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/store/gameStore';
 import { useUserStore } from '@/lib/store/userStore';
@@ -17,17 +17,26 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { Header } from '@/components/layout/Header';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { XCircle, Home, RotateCcw } from 'lucide-react';
+import { XCircle, Home, RotateCcw, PlayCircle, PlusCircle } from 'lucide-react';
 import { bgmManager } from '@/lib/audio/bgmManager';
+import { DIFFICULTY_CONFIGS } from '@/lib/utils/constants';
+import { formatTime } from '@/lib/utils/format';
 import type { Difficulty } from '@/types';
 
 export default function PlayPage() {
   const router = useRouter();
   const status = useGameStore((s) => s.status);
   const startNewGame = useGameStore((s) => s.startNewGame);
+  const resetToIdle = useGameStore((s) => s.resetToIdle);
   const getGameResult = useGameStore((s) => s.getGameResult);
   const recordGameResult = useUserStore((s) => s.recordGameResult);
   const recordStreak = useUserStore((s) => s.recordStreak);
+
+  // Show resume dialog when entering with an in-progress game
+  const [showResumeDialog, setShowResumeDialog] = useState(() => {
+    const s = useGameStore.getState().status;
+    return s === 'playing' || s === 'paused';
+  });
 
   // Hooks
   useTimer();
@@ -113,6 +122,82 @@ export default function PlayPage() {
   const handleGoHome = useCallback(() => {
     router.push('/');
   }, [router]);
+
+  const handleResume = useCallback(() => {
+    setShowResumeDialog(false);
+    const s = useGameStore.getState().status;
+    if (s === 'paused') {
+      useGameStore.getState().resumeGame();
+    }
+  }, []);
+
+  const handleNewGameFromResume = useCallback(() => {
+    setShowResumeDialog(false);
+    resetToIdle();
+  }, [resetToIdle]);
+
+  // Resume dialog: show when returning to an in-progress game
+  if (showResumeDialog && (status === 'playing' || status === 'paused')) {
+    const difficulty = useGameStore.getState().difficulty;
+    const elapsedTime = useGameStore.getState().elapsedTime;
+    const mistakes = useGameStore.getState().mistakes;
+    const config = DIFFICULTY_CONFIGS[difficulty];
+
+    return (
+      <div className="min-h-screen pb-24 pt-16">
+        <Header />
+        <main className="mx-auto max-w-lg px-4 pt-4">
+          <Modal
+            isOpen={true}
+            onClose={handleResume}
+            title="진행 중인 게임"
+          >
+            <div className="flex flex-col items-center space-y-4">
+              <div className="w-full rounded-xl bg-white/5 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/50">난이도</span>
+                  <span className="text-sm font-semibold" style={{ color: config.color }}>
+                    {config.icon} {config.nameKo}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/50">경과 시간</span>
+                  <span className="text-sm font-semibold text-white tabular-nums">
+                    {formatTime(elapsedTime)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/50">실수</span>
+                  <span className="text-sm font-semibold text-white">
+                    {mistakes} / 3
+                  </span>
+                </div>
+              </div>
+              <div className="flex w-full gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={handleNewGameFromResume}
+                  className="flex-1"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  새 게임
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleResume}
+                  className="flex-1"
+                >
+                  <PlayCircle className="h-4 w-4" />
+                  계속하기
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        </main>
+        <BottomNav />
+      </div>
+    );
+  }
 
   // Idle: show difficulty selector
   if (status === 'idle') {
