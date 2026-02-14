@@ -65,9 +65,8 @@ public class MainActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setTextZoom(100);
 
-        // Support for service workers
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            settings.setSafeBrowsingEnabled(false);
+            settings.setSafeBrowsingEnabled(true);
         }
 
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);

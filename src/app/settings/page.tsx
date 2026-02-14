@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Shield, Scale, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -191,6 +191,37 @@ export default function SettingsPage() {
             </button>
           </div>
         </Card>
+
+        {/* Legal */}
+        <Card className="divide-y divide-white/5">
+          <h3 className="pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            법적 고지
+          </h3>
+          <Link
+            href="/privacy"
+            className="flex items-center justify-between py-3 hover:opacity-80 transition-opacity"
+          >
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-indigo-400" />
+              <span className="text-sm font-medium text-white">개인정보처리방침</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-slate-500" />
+          </Link>
+          <Link
+            href="/licenses"
+            className="flex items-center justify-between py-3 hover:opacity-80 transition-opacity"
+          >
+            <div className="flex items-center gap-2">
+              <Scale className="h-4 w-4 text-indigo-400" />
+              <span className="text-sm font-medium text-white">오픈소스 라이선스</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-slate-500" />
+          </Link>
+        </Card>
+
+        <p className="text-center text-xs text-slate-600 pb-4">
+          칸채움 v1.3.0
+        </p>
       </main>
 
       <BottomNav />

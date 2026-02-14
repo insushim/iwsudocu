@@ -13,6 +13,8 @@ const APP_SHELL = [
   '/leaderboard',
   '/achievements',
   '/settings',
+  '/privacy',
+  '/licenses',
   '/print',
   '/manifest.json',
   '/icon.svg',
