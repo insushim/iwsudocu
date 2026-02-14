@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# android
+android/app/build/
+android/.gradle/
+android/keystore/
+android/local.properties
+
+# old twa build
+twa-build/
+nul
