@@ -32,6 +32,10 @@
     min-height: 48px;
   }
 
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
