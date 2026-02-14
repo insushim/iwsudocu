@@ -136,6 +136,7 @@ export interface GameStore {
   freezeTimer: () => void;
   activateComboBoost: () => void;
   undoMistake: () => void;
+  resetToIdle: () => void;
   getGameResult: () => {
     difficulty: Difficulty;
     timeInSeconds: number;
@@ -849,5 +850,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     toast('실수 1회가 취소되었습니다!', { icon: '⏪' });
 
     set({ mistakes: mistakes - 1 });
+  },
+
+  resetToIdle: () => {
+    set(getInitialState());
   },
 }));
