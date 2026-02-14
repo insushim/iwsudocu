@@ -28,7 +28,7 @@ export default function NumberPad() {
   }, [currentBoard]);
 
   return (
-    <div className="flex items-center justify-center gap-[5px] sm:gap-2 w-full max-w-2xl mx-auto px-2">
+    <div className="flex items-center gap-1 sm:gap-2 w-full max-w-2xl mx-auto">
       {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
         const remaining = remainingCounts[num];
         const isDisabled = remaining <= 0;
@@ -43,8 +43,8 @@ export default function NumberPad() {
             whileTap={{ scale: 0.9 }}
             className={cn(
               'flex flex-col items-center justify-center',
-              'min-w-0 min-h-[44px] sm:min-w-[44px] sm:min-h-[52px] lg:min-h-[56px]',
-              'flex-1 rounded-xl font-bold text-lg sm:text-xl lg:text-2xl',
+              'min-w-0 min-h-[44px] sm:min-h-[52px] lg:min-h-[56px]',
+              'flex-1 rounded-lg sm:rounded-xl font-bold text-base sm:text-xl lg:text-2xl',
               'transition-all duration-150',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
               isActive
@@ -56,7 +56,7 @@ export default function NumberPad() {
             <span>{num}</span>
             <span
               className={cn(
-                'text-[10px] sm:text-xs font-normal leading-none mt-0.5',
+                'text-[9px] sm:text-xs font-normal leading-none mt-0.5',
                 isActive ? 'text-blue-100' : 'text-white/40',
               )}
             >
@@ -73,14 +73,14 @@ export default function NumberPad() {
         whileTap={{ scale: 0.9 }}
         className={cn(
           'flex flex-col items-center justify-center',
-          'min-w-[36px] min-h-[44px] sm:min-w-[44px] sm:min-h-[52px] lg:min-h-[56px]',
-          'flex-1 rounded-xl',
+          'min-w-0 min-h-[44px] sm:min-h-[52px] lg:min-h-[56px]',
+          'flex-1 rounded-lg sm:rounded-xl',
           'bg-white/10 text-white/70 hover:bg-white/20',
           'transition-all duration-150',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
         )}
       >
-        <Eraser className="w-5 h-5" />
+        <Eraser className="w-4 h-4 sm:w-5 sm:h-5" />
       </motion.button>
     </div>
   );
