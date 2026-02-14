@@ -36,6 +36,10 @@
     padding-top: env(safe-area-inset-top);
   }
 
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 12px);
+  }
+
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
