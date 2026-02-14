@@ -472,7 +472,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   toggleNote: (num: number) => {
     const { puzzle, currentBoard, notes, selectedCell, status, history, historyIndex } = get();
 
-    if (!puzzle || !selectedCell || status !== 'playing') return;
+    if (!puzzle || status !== 'playing') return;
+
+    if (!selectedCell) {
+      toast('셀을 먼저 선택해주세요', { icon: '👆' });
+      return;
+    }
 
     const { row, col } = selectedCell;
 
@@ -512,7 +517,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   toggleNotesMode: () => {
-    set((state) => ({ isNotesMode: !state.isNotesMode }));
+    const newMode = !get().isNotesMode;
+    soundManager.play('tap');
+    hapticLight();
+    set({ isNotesMode: newMode });
   },
 
   // -----------------------------------------------------------------------
