@@ -9,6 +9,7 @@ import type { LeaderboardEntry, LeaderboardPeriod, PlayerTier } from '@/types';
 
 const DIFFICULTY_TABS = [
   { key: 'all', label: '전체' },
+  { key: 'beginner', label: '입문' },
   { key: 'easy', label: '쉬움' },
   { key: 'medium', label: '보통' },
   { key: 'hard', label: '어려움' },

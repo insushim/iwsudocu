@@ -2,15 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Gamepad2, Calendar, User, ShoppingBag } from 'lucide-react';
+import { Home, Gamepad2, Calendar, Trophy, User } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
 const NAV_ITEMS = [
   { label: '홈', icon: Home, path: '/' },
   { label: '플레이', icon: Gamepad2, path: '/play' },
   { label: '데일리', icon: Calendar, path: '/daily' },
+  { label: '랭킹', icon: Trophy, path: '/leaderboard' },
   { label: '프로필', icon: User, path: '/profile' },
-  { label: '상점', icon: ShoppingBag, path: '/shop' },
 ] as const;
 
 export function BottomNav() {
