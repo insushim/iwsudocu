@@ -133,7 +133,7 @@ export default function PlayPage() {
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
       {/* Game UI */}
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-2 pt-1 pb-2">
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-2 pt-1 pb-2 safe-top">
         <GameHeader />
         <ComboIndicator />
         <div className="flex-1 flex items-center justify-center py-1 min-h-0">

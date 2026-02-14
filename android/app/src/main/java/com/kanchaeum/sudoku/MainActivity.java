@@ -50,13 +50,6 @@ public class MainActivity extends Activity {
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         window.setStatusBarColor(getResources().getColor(R.color.colorPrimary, null));
         window.setNavigationBarColor(getResources().getColor(R.color.navigationColor, null));
-
-        // Dark status bar icons = false (we want light icons on dark bg)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            window.getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-            );
-        }
     }
 
     private void setupWebView() {
