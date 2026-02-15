@@ -62,7 +62,7 @@ export default function PlayPage() {
     };
   }, [status, musicEnabled]);
 
-  // Record game result immediately on completion (not on modal button click)
+  // Record local stats immediately on completion
   const resultRecorded = useRef(false);
 
   useEffect(() => {
@@ -83,31 +83,37 @@ export default function PlayPage() {
           isDaily,
         });
         recordStreak();
-
-        const playerName = useUserStore.getState().profile.displayName;
-        const today = new Date();
-        const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-        fetch('/api/leaderboard', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            player_name: playerName,
-            score: result.totalScore,
-            difficulty: result.difficulty,
-            time_seconds: result.timeInSeconds,
-            mistakes: result.mistakes,
-            max_combo: result.maxCombo,
-            is_perfect: result.mistakes === 0 ? 1 : 0,
-            is_daily: isDaily ? 1 : 0,
-            daily_date: isDaily ? dateStr : undefined,
-          }),
-        }).catch(() => { /* silently fail for offline */ });
       }
     }
     if (status === 'idle') {
       resultRecorded.current = false;
     }
   }, [status, getGameResult, recordGameResult, recordStreak]);
+
+  // Submit to leaderboard after user enters their nickname
+  const handleSubmitName = useCallback((playerName: string) => {
+    const result = getGameResult();
+    if (!result) return;
+    const puzzleId = useGameStore.getState().puzzle?.id ?? '';
+    const isDaily = puzzleId.startsWith('daily-');
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    fetch('/api/leaderboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        player_name: playerName,
+        score: result.totalScore,
+        difficulty: result.difficulty,
+        time_seconds: result.timeInSeconds,
+        mistakes: result.mistakes,
+        max_combo: result.maxCombo,
+        is_perfect: result.mistakes === 0 ? 1 : 0,
+        is_daily: isDaily ? 1 : 0,
+        daily_date: isDaily ? dateStr : undefined,
+      }),
+    }).catch(() => { /* silently fail for offline */ });
+  }, [getGameResult]);
 
   const handleSelectDifficulty = useCallback(
     (difficulty: Difficulty) => {
@@ -243,6 +249,7 @@ export default function PlayPage() {
         onClose={handleGoHome}
         onNewGame={handleNewGame}
         onGoHome={handleGoHome}
+        onSubmitName={handleSubmitName}
       />
 
       {/* Failed modal */}
