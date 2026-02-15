@@ -2,17 +2,19 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Home, RotateCcw, Star, Zap } from 'lucide-react';
+import { Trophy, Home, RotateCcw, Star, Zap, Send } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { cn } from '@/lib/utils/cn';
 import { formatTime, formatNumber } from '@/lib/utils/format';
 import { useGameStore } from '@/lib/store/gameStore';
+import { useUserStore } from '@/lib/store/userStore';
 
 interface GameCompleteModalProps {
   isOpen: boolean;
   onClose: () => void;
   onNewGame: () => void;
   onGoHome: () => void;
+  onSubmitName: (name: string) => void;
 }
 
 interface ScoreLine {
@@ -49,18 +51,38 @@ export default function GameCompleteModal({
   onClose,
   onNewGame,
   onGoHome,
+  onSubmitName,
 }: GameCompleteModalProps) {
   const gameResult = useGameStore((s) => s.getGameResult);
   const elapsedTime = useGameStore((s) => s.elapsedTime);
   const mistakes = useGameStore((s) => s.mistakes);
   const hintsUsed = useGameStore((s) => s.hintsUsed);
   const maxCombo = useGameStore((s) => s.maxCombo);
+  const currentName = useUserStore((s) => s.profile.displayName);
 
   const [visibleLines, setVisibleLines] = useState(0);
+  const [nickname, setNickname] = useState('');
+  const [nameSubmitted, setNameSubmitted] = useState(false);
   const confettiFired = useRef(false);
   const animationStarted = useRef(false);
 
   const result = gameResult();
+
+  // Initialize nickname when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const saved = useUserStore.getState().profile.displayName;
+      setNickname(saved === 'Player' || saved === '플레이어' ? '' : saved);
+      setNameSubmitted(false);
+    }
+  }, [isOpen]);
+
+  const handleSubmitName = useCallback(() => {
+    const finalName = nickname.trim() || '익명';
+    useUserStore.getState().setDisplayName(finalName);
+    onSubmitName(finalName);
+    setNameSubmitted(true);
+  }, [nickname, onSubmitName]);
 
   // Fire confetti on open
   useEffect(() => {
@@ -267,12 +289,70 @@ export default function GameCompleteModal({
               </motion.div>
             )}
 
-            {/* Action buttons */}
-            {visibleLines >= scoreLines.length && (
+            {/* Nickname input for leaderboard */}
+            {visibleLines >= scoreLines.length && !nameSubmitted && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
+                transition={{ delay: 0.4 }}
+                className="px-6 pb-4"
+              >
+                <label className="block text-xs text-white/50 mb-1.5">
+                  랭킹에 등록할 닉네임
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value.slice(0, 20))}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSubmitName()}
+                    placeholder="닉네임 입력"
+                    maxLength={20}
+                    className={cn(
+                      'flex-1 px-3 py-2.5 rounded-xl text-sm font-medium',
+                      'bg-white/10 text-white placeholder-white/30',
+                      'border border-white/10 focus:border-indigo-400/50',
+                      'outline-none transition-colors',
+                    )}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSubmitName}
+                    className={cn(
+                      'px-4 py-2.5 rounded-xl',
+                      'bg-gradient-to-r from-indigo-500 to-purple-600 text-white',
+                      'font-semibold text-sm shadow-lg shadow-indigo-500/25',
+                      'hover:shadow-xl hover:shadow-indigo-500/40',
+                      'transition-all duration-150',
+                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
+                    )}
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Action buttons - show after name submitted */}
+            {visibleLines >= scoreLines.length && nameSubmitted && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="px-6 pb-2"
+              >
+                <p className="text-center text-xs text-emerald-400 mb-3">
+                  랭킹에 등록되었습니다!
+                </p>
+              </motion.div>
+            )}
+
+            {/* Action buttons */}
+            {visibleLines >= scoreLines.length && nameSubmitted && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
                 className="flex gap-3 px-6 pb-6"
               >
                 <button
