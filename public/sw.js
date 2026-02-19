@@ -1,23 +1,23 @@
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = "v3";
 const STATIC_CACHE = `kanchaeum-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `kanchaeum-dynamic-${CACHE_VERSION}`;
 const IMMUTABLE_CACHE = `kanchaeum-immutable-${CACHE_VERSION}`;
 
 // App shell routes to precache
 const APP_SHELL = [
-  '/',
-  '/play',
-  '/daily',
-  '/profile',
-  '/shop',
-  '/leaderboard',
-  '/achievements',
-  '/settings',
-  '/privacy',
-  '/licenses',
-  '/print',
-  '/manifest.json',
-  '/icon.svg',
+  "/",
+  "/play",
+  "/daily",
+  "/profile",
+  "/shop",
+  "/leaderboard",
+  "/achievements",
+  "/settings",
+  "/privacy",
+  "/licenses",
+  "/print",
+  "/manifest.json",
+  "/icon.svg",
 ];
 
 const ALL_CACHES = [STATIC_CACHE, DYNAMIC_CACHE, IMMUTABLE_CACHE];
@@ -47,32 +47,42 @@ button:active{transform:scale(.95);background:#4338CA}
 </body></html>`;
 
 // Install: precache app shell
-self.addEventListener('install', (event) => {
+self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) =>
       cache.addAll(APP_SHELL).catch(() => {
         // Cache what we can, fail silently for individual items
         return Promise.allSettled(
           APP_SHELL.map((url) =>
-            cache.add(url).catch(() => console.log('SW: failed to cache', url))
-          )
+            cache.add(url).catch(() => console.log("SW: failed to cache", url)),
+          ),
         );
-      })
-    )
+      }),
+    ),
   );
   self.skipWaiting();
 });
 
-// Activate: clean old caches
-self.addEventListener('activate', (event) => {
+// Activate: clean old caches and notify clients
+self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => !ALL_CACHES.includes(key))
-          .map((key) => caches.delete(key))
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => !ALL_CACHES.includes(key))
+            .map((key) => caches.delete(key)),
+        ),
       )
-    )
+      .then(() => {
+        // Notify all clients about the update
+        self.clients.matchAll().then((clients) => {
+          clients.forEach((client) => {
+            client.postMessage({ type: "SW_UPDATED", version: CACHE_VERSION });
+          });
+        });
+      }),
   );
   self.clients.claim();
 });
@@ -80,48 +90,72 @@ self.addEventListener('activate', (event) => {
 // Helper: is this a navigation request (HTML page)?
 function isNavigationRequest(request) {
   return (
-    request.mode === 'navigate' ||
-    (request.method === 'GET' && request.headers.get('accept')?.includes('text/html'))
+    request.mode === "navigate" ||
+    (request.method === "GET" &&
+      request.headers.get("accept")?.includes("text/html"))
   );
 }
 
 // Helper: is this an immutable asset (_next/static)?
 function isImmutableAsset(url) {
-  return url.pathname.includes('/_next/static/');
+  return url.pathname.includes("/_next/static/");
 }
 
 // Helper: is this a static asset?
 function isStaticAsset(url) {
-  return /\.(js|css|woff2?|ttf|otf|png|jpg|jpeg|gif|svg|ico|webp|avif|mp3|ogg|wav)(\?.*)?$/.test(url.pathname);
+  return /\.(js|css|woff2?|ttf|otf|png|jpg|jpeg|gif|svg|ico|webp|avif|mp3|ogg|wav)(\?.*)?$/.test(
+    url.pathname,
+  );
 }
 
 // Helper: is this an API call?
 function isApiRequest(url) {
-  return url.pathname.startsWith('/api/');
+  return url.pathname.startsWith("/api/");
+}
+
+// Helper: is this a Next.js RSC/internal request?
+function isRscRequest(url) {
+  return url.searchParams.has("_rsc") || url.pathname.includes("__next.");
+}
+
+// Helper: safe cache put (guards against non-GET and other errors)
+function safeCachePut(cacheName, request, response) {
+  if (request.method !== "GET") return;
+  caches
+    .open(cacheName)
+    .then((cache) => cache.put(request, response).catch(() => {}));
 }
 
 // Fetch handler
-self.addEventListener('fetch', (event) => {
+self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
   // Only handle same-origin and GET requests
-  if (request.method !== 'GET') return;
-  if (url.origin !== self.location.origin && !url.hostname.includes('numero-quest')) return;
+  if (request.method !== "GET") return;
+  if (
+    url.origin !== self.location.origin &&
+    !url.hostname.includes("numero-quest")
+  )
+    return;
+
+  // Skip RSC prefetch requests (they 404 on static export)
+  if (isRscRequest(url)) return;
 
   // 1. Immutable assets (_next/static/) - Cache first, never expires
   if (isImmutableAsset(url)) {
     event.respondWith(
       caches.match(request).then((cached) => {
         if (cached) return cached;
-        return fetch(request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(IMMUTABLE_CACHE).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        }).catch(() => caches.match(request));
-      })
+        return fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              safeCachePut(IMMUTABLE_CACHE, request, response.clone());
+            }
+            return response;
+          })
+          .catch(() => caches.match(request));
+      }),
     );
     return;
   }
@@ -132,12 +166,11 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then((response) => {
           if (response.ok) {
-            const clone = response.clone();
-            caches.open(DYNAMIC_CACHE).then((cache) => cache.put(request, clone));
+            safeCachePut(DYNAMIC_CACHE, request, response.clone());
           }
           return response;
         })
-        .catch(() => caches.match(request))
+        .catch(() => caches.match(request)),
     );
     return;
   }
@@ -148,8 +181,7 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then((response) => {
           if (response.ok) {
-            const clone = response.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+            safeCachePut(STATIC_CACHE, request, response.clone());
           }
           return response;
         })
@@ -158,10 +190,10 @@ self.addEventListener('fetch', (event) => {
             if (cached) return cached;
             // Return offline fallback
             return new Response(OFFLINE_HTML, {
-              headers: { 'Content-Type': 'text/html; charset=UTF-8' },
+              headers: { "Content-Type": "text/html; charset=UTF-8" },
             });
-          })
-        )
+          }),
+        ),
     );
     return;
   }
@@ -173,15 +205,14 @@ self.addEventListener('fetch', (event) => {
         const fetchPromise = fetch(request)
           .then((response) => {
             if (response.ok) {
-              const clone = response.clone();
-              caches.open(DYNAMIC_CACHE).then((cache) => cache.put(request, clone));
+              safeCachePut(DYNAMIC_CACHE, request, response.clone());
             }
             return response;
           })
           .catch(() => cached);
 
         return cached || fetchPromise;
-      })
+      }),
     );
     return;
   }
@@ -191,11 +222,10 @@ self.addEventListener('fetch', (event) => {
     fetch(request)
       .then((response) => {
         if (response.ok) {
-          const clone = response.clone();
-          caches.open(DYNAMIC_CACHE).then((cache) => cache.put(request, clone));
+          safeCachePut(DYNAMIC_CACHE, request, response.clone());
         }
         return response;
       })
-      .catch(() => caches.match(request))
+      .catch(() => caches.match(request)),
   );
 });
