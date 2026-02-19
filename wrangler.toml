@@ -5,4 +5,4 @@ pages_build_output_dir = "out"
 [[d1_databases]]
 binding = "DB"
 database_name = "numero-quest-db"
-database_id = "7f296301-d4a8-4a5b-9aa4-a4e565ffe94a"
+database_id = "03445a91-176c-457a-95ce-63b42ab505c7"
