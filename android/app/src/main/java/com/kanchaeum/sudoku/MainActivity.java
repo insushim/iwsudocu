@@ -22,6 +22,8 @@ public class MainActivity extends Activity {
 
     private static final String APP_URL = "https://numero-quest.pages.dev";
     private static final String APP_HOST = "numero-quest.pages.dev";
+    private static final String APP_VERSION = "1.4.0";
+    private static final int APP_VERSION_CODE = 5;
     private WebView webView;
     private FrameLayout splashView;
     private boolean isLoaded = false;
@@ -65,12 +67,24 @@ public class MainActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setTextZoom(100);
 
+        // Append app version to user agent for update checking
+        String ua = settings.getUserAgentString();
+        settings.setUserAgentString(ua + " KanchaeumApp/" + APP_VERSION);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
         }
 
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+
+        // Expose app version to JavaScript
+        webView.addJavascriptInterface(new Object() {
+            @android.webkit.JavascriptInterface
+            public String getVersion() { return APP_VERSION; }
+            @android.webkit.JavascriptInterface
+            public int getVersionCode() { return APP_VERSION_CODE; }
+        }, "KanchaeumNative");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override

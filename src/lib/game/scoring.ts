@@ -1,4 +1,4 @@
-import { Difficulty } from '@/types';
+import { Difficulty } from "@/types";
 
 const BASE_SCORES: Record<Difficulty, number> = {
   beginner: 50,
@@ -9,7 +9,10 @@ const BASE_SCORES: Record<Difficulty, number> = {
   master: 1500,
 };
 
-export function calculateTimeBonus(difficulty: Difficulty, timeInSeconds: number): number {
+export function calculateTimeBonus(
+  difficulty: Difficulty,
+  timeInSeconds: number,
+): number {
   const targetTimes: Record<Difficulty, number> = {
     beginner: 180,
     easy: 300,
@@ -20,10 +23,11 @@ export function calculateTimeBonus(difficulty: Difficulty, timeInSeconds: number
   };
 
   const target = targetTimes[difficulty];
-  if (timeInSeconds >= target * 2) return 0;
+  const maxTime = target * 2;
+  if (timeInSeconds >= maxTime) return 0;
 
-  const ratio = Math.max(0, 1 - (timeInSeconds / (target * 2)));
-  return Math.round(BASE_SCORES[difficulty] * ratio * 0.5);
+  const ratio = Math.max(0, 1 - timeInSeconds / maxTime);
+  return Math.round(BASE_SCORES[difficulty] * ratio * 1.5);
 }
 
 export function calculateMistakePenalty(mistakes: number): number {
@@ -43,7 +47,11 @@ export function calculateComboBonus(maxCombo: number): number {
   return 1000;
 }
 
-export function calculatePerfectBonus(mistakes: number, hintsUsed: number, difficulty: Difficulty): number {
+export function calculatePerfectBonus(
+  mistakes: number,
+  hintsUsed: number,
+  difficulty: Difficulty,
+): number {
   if (mistakes === 0 && hintsUsed === 0) {
     return Math.round(BASE_SCORES[difficulty] * 0.5);
   }
@@ -77,7 +85,23 @@ export function calculateFinalScore(params: {
   const mistakePenalty = calculateMistakePenalty(mistakes);
   const hintPenalty = calculateHintPenalty(hintsUsed);
 
-  const totalScore = Math.max(0, baseScore + timeBonus + comboBonus + perfectBonus - mistakePenalty - hintPenalty);
+  const totalScore = Math.max(
+    0,
+    baseScore +
+      timeBonus +
+      comboBonus +
+      perfectBonus -
+      mistakePenalty -
+      hintPenalty,
+  );
 
-  return { baseScore, timeBonus, comboBonus, perfectBonus, mistakePenalty, hintPenalty, totalScore };
+  return {
+    baseScore,
+    timeBonus,
+    comboBonus,
+    perfectBonus,
+    mistakePenalty,
+    hintPenalty,
+    totalScore,
+  };
 }
