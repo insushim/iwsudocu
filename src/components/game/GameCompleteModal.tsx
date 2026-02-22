@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Home, RotateCcw, Star, Zap, Send } from 'lucide-react';
-import confetti from 'canvas-confetti';
-import { cn } from '@/lib/utils/cn';
-import { formatTime, formatNumber } from '@/lib/utils/format';
-import { useGameStore } from '@/lib/store/gameStore';
-import { useUserStore } from '@/lib/store/userStore';
+import { useEffect, useState, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Trophy, Home, RotateCcw, Star, Zap, Send } from "lucide-react";
+import confetti from "canvas-confetti";
+import { cn } from "@/lib/utils/cn";
+import { formatTime, formatNumber } from "@/lib/utils/format";
+import { useGameStore } from "@/lib/store/gameStore";
+import { useUserStore } from "@/lib/store/userStore";
 
 interface GameCompleteModalProps {
   isOpen: boolean;
@@ -23,7 +23,13 @@ interface ScoreLine {
   isNegative?: boolean;
 }
 
-function AnimatedCounter({ target, duration = 1000 }: { target: number; duration?: number }) {
+function AnimatedCounter({
+  target,
+  duration = 1000,
+}: {
+  target: number;
+  duration?: number;
+}) {
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {
@@ -58,13 +64,13 @@ export default function GameCompleteModal({
   const mistakes = useGameStore((s) => s.mistakes);
   const hintsUsed = useGameStore((s) => s.hintsUsed);
   const maxCombo = useGameStore((s) => s.maxCombo);
-  const currentName = useUserStore((s) => s.profile.displayName);
 
   const [visibleLines, setVisibleLines] = useState(0);
-  const [nickname, setNickname] = useState('');
+  const [nickname, setNickname] = useState("");
   const [nameSubmitted, setNameSubmitted] = useState(false);
   const confettiFired = useRef(false);
   const animationStarted = useRef(false);
+  const submitCalledRef = useRef(false);
 
   const result = gameResult();
 
@@ -72,36 +78,51 @@ export default function GameCompleteModal({
   useEffect(() => {
     if (isOpen) {
       const saved = useUserStore.getState().profile.displayName;
-      setNickname(saved === 'Player' || saved === '플레이어' ? '' : saved);
+      setNickname(saved === "Player" || saved === "플레이어" ? "" : saved);
       setNameSubmitted(false);
+      submitCalledRef.current = false;
     }
   }, [isOpen]);
 
   const handleSubmitName = useCallback(() => {
-    const finalName = nickname.trim() || '익명';
+    if (submitCalledRef.current) return;
+    submitCalledRef.current = true;
+    const finalName = nickname.trim() || "익명";
     useUserStore.getState().setDisplayName(finalName);
     onSubmitName(finalName);
     setNameSubmitted(true);
   }, [nickname, onSubmitName]);
+
+  // Auto-submit on close if user didn't submit manually
+  const handleClose = useCallback(() => {
+    if (!submitCalledRef.current && result) {
+      submitCalledRef.current = true;
+      const name =
+        nickname.trim() ||
+        useUserStore.getState().profile.displayName ||
+        "익명";
+      onSubmitName(name === "Player" || name === "플레이어" ? "익명" : name);
+    }
+    onClose();
+  }, [nickname, onClose, onSubmitName, result]);
 
   // Fire confetti on open
   useEffect(() => {
     if (isOpen && !confettiFired.current) {
       confettiFired.current = true;
 
-      // Burst from both sides
       const fireConfetti = () => {
         confetti({
           particleCount: 80,
           spread: 70,
           origin: { x: 0.2, y: 0.6 },
-          colors: ['#6366F1', '#8B5CF6', '#3B82F6', '#22D3EE', '#FFD700'],
+          colors: ["#6366F1", "#8B5CF6", "#3B82F6", "#22D3EE", "#FFD700"],
         });
         confetti({
           particleCount: 80,
           spread: 70,
           origin: { x: 0.8, y: 0.6 },
-          colors: ['#6366F1', '#8B5CF6', '#3B82F6', '#22D3EE', '#FFD700'],
+          colors: ["#6366F1", "#8B5CF6", "#3B82F6", "#22D3EE", "#FFD700"],
         });
       };
 
@@ -117,37 +138,33 @@ export default function GameCompleteModal({
     }
   }, [isOpen]);
 
-  // Sequentially reveal score lines
+  // Sequentially reveal score lines - schedule all timers at once, no cleanup
   const scoreLines: ScoreLine[] = result
     ? [
-        { label: '기본 점수', value: result.baseScore },
-        { label: '시간 보너스', value: result.timeBonus },
-        { label: '콤보 보너스', value: result.comboBonus },
-        { label: '퍼펙트 보너스', value: result.perfectBonus },
-        { label: '실수 패널티', value: result.mistakePenalty, isNegative: true },
-        { label: '힌트 패널티', value: result.hintPenalty, isNegative: true },
+        { label: "기본 점수", value: result.baseScore },
+        { label: "시간 보너스", value: result.timeBonus },
+        { label: "콤보 보너스", value: result.comboBonus },
+        { label: "퍼펙트 보너스", value: result.perfectBonus },
+        {
+          label: "실수 패널티",
+          value: result.mistakePenalty,
+          isNegative: true,
+        },
+        { label: "힌트 패널티", value: result.hintPenalty, isNegative: true },
       ]
     : [];
 
   useEffect(() => {
-    if (!isOpen || !result || animationStarted.current) return;
-
+    if (!isOpen || animationStarted.current) return;
     animationStarted.current = true;
-    const timers: NodeJS.Timeout[] = [];
 
-    const reveal = (index: number) => {
-      if (index <= scoreLines.length) {
-        setVisibleLines(index);
-        timers.push(setTimeout(() => reveal(index + 1), 200));
-      }
-    };
-
-    timers.push(setTimeout(() => reveal(1), 500));
-
-    return () => {
-      timers.forEach(clearTimeout);
-    };
-  }, [isOpen, scoreLines.length, result]);
+    // Schedule all reveals upfront with fixed delays (no cleanup needed)
+    const NUM_LINES = 6;
+    for (let i = 1; i <= NUM_LINES; i++) {
+      setTimeout(() => setVisibleLines(i), 500 + i * 200);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const handleNewGame = useCallback(() => {
     onNewGame();
@@ -167,17 +184,17 @@ export default function GameCompleteModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          onClick={onClose}
+          onClick={handleClose}
         >
           <motion.div
             initial={{ scale: 0.8, opacity: 0, y: 30 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.8, opacity: 0, y: 30 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
             className={cn(
-              'relative w-full max-w-sm rounded-2xl overflow-hidden',
-              'bg-gradient-to-b from-slate-800 to-slate-900',
-              'border border-white/10 shadow-2xl',
+              "relative w-full max-w-sm max-h-[85dvh] rounded-2xl overflow-y-auto",
+              "bg-gradient-to-b from-slate-800 to-slate-900",
+              "border border-white/10 shadow-2xl",
             )}
             onClick={(e) => e.stopPropagation()}
           >
@@ -186,7 +203,12 @@ export default function GameCompleteModal({
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 15, delay: 0.2 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 300,
+                  damping: 15,
+                  delay: 0.2,
+                }}
                 className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center mb-3 shadow-lg shadow-yellow-500/30"
               >
                 <Trophy className="w-8 h-8 text-white" />
@@ -225,13 +247,13 @@ export default function GameCompleteModal({
                       <span className="text-white/60">{line.label}</span>
                       <span
                         className={cn(
-                          'font-semibold tabular-nums',
+                          "font-semibold tabular-nums",
                           line.isNegative && line.value > 0
-                            ? 'text-red-400'
-                            : 'text-white/80',
+                            ? "text-red-400"
+                            : "text-white/80",
                         )}
                       >
-                        {line.isNegative && line.value > 0 ? '-' : '+'}
+                        {line.isNegative && line.value > 0 ? "-" : "+"}
                         {formatNumber(line.value)}
                       </span>
                     </motion.div>
@@ -253,12 +275,17 @@ export default function GameCompleteModal({
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
                   className="flex items-center justify-between pt-1"
                 >
-                  <span className="text-base font-bold text-white">총 점수</span>
+                  <span className="text-base font-bold text-white">
+                    총 점수
+                  </span>
                   <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 tabular-nums">
-                    <AnimatedCounter target={result.totalScore} duration={1200} />
+                    <AnimatedCounter
+                      target={result.totalScore}
+                      duration={1200}
+                    />
                   </span>
                 </motion.div>
               )}
@@ -305,14 +332,14 @@ export default function GameCompleteModal({
                     type="text"
                     value={nickname}
                     onChange={(e) => setNickname(e.target.value.slice(0, 20))}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSubmitName()}
+                    onKeyDown={(e) => e.key === "Enter" && handleSubmitName()}
                     placeholder="닉네임 입력"
                     maxLength={20}
                     className={cn(
-                      'flex-1 px-3 py-2.5 rounded-xl text-sm font-medium',
-                      'bg-white/10 text-white placeholder-white/30',
-                      'border border-white/10 focus:border-indigo-400/50',
-                      'outline-none transition-colors',
+                      "flex-1 px-3 py-2.5 rounded-xl text-sm font-medium",
+                      "bg-white/10 text-white placeholder-white/30",
+                      "border border-white/10 focus:border-indigo-400/50",
+                      "outline-none transition-colors",
                     )}
                     autoFocus
                   />
@@ -320,12 +347,12 @@ export default function GameCompleteModal({
                     type="button"
                     onClick={handleSubmitName}
                     className={cn(
-                      'px-4 py-2.5 rounded-xl',
-                      'bg-gradient-to-r from-indigo-500 to-purple-600 text-white',
-                      'font-semibold text-sm shadow-lg shadow-indigo-500/25',
-                      'hover:shadow-xl hover:shadow-indigo-500/40',
-                      'transition-all duration-150',
-                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
+                      "px-4 py-2.5 rounded-xl",
+                      "bg-gradient-to-r from-indigo-500 to-purple-600 text-white",
+                      "font-semibold text-sm shadow-lg shadow-indigo-500/25",
+                      "hover:shadow-xl hover:shadow-indigo-500/40",
+                      "transition-all duration-150",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400",
                     )}
                   >
                     <Send className="w-4 h-4" />
@@ -359,29 +386,27 @@ export default function GameCompleteModal({
                   type="button"
                   onClick={handleGoHome}
                   className={cn(
-                    'flex-1 flex items-center justify-center gap-2 py-3 rounded-xl',
-                    'bg-white/10 text-white/80 hover:bg-white/20',
-                    'font-semibold transition-all duration-150',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
+                    "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl",
+                    "bg-white/10 text-white/80 hover:bg-white/20",
+                    "font-semibold transition-all duration-150",
+                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400",
                   )}
                 >
-                  <Home className="w-4 h-4" />
-                  홈
+                  <Home className="w-4 h-4" />홈
                 </button>
                 <button
                   type="button"
                   onClick={handleNewGame}
                   className={cn(
-                    'flex-1 flex items-center justify-center gap-2 py-3 rounded-xl',
-                    'bg-gradient-to-r from-indigo-500 to-purple-600 text-white',
-                    'font-semibold shadow-lg shadow-indigo-500/25',
-                    'hover:shadow-xl hover:shadow-indigo-500/40',
-                    'transition-all duration-150',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
+                    "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl",
+                    "bg-gradient-to-r from-indigo-500 to-purple-600 text-white",
+                    "font-semibold shadow-lg shadow-indigo-500/25",
+                    "hover:shadow-xl hover:shadow-indigo-500/40",
+                    "transition-all duration-150",
+                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400",
                   )}
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  새 게임
+                  <RotateCcw className="w-4 h-4" />새 게임
                 </button>
               </motion.div>
             )}
