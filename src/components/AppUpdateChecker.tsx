@@ -7,17 +7,31 @@ import { cn } from "@/lib/utils/cn";
 const GITHUB_REPO = "insushim/iwsudocu";
 const DISMISS_KEY = "kanchaeum-update-dismissed";
 
+/** Detect if running inside Android WebView (includes old APKs without version injection) */
+function isAndroidWebView(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent;
+  // Android WebView includes "; wv)" in user agent
+  if (/; wv\)/.test(ua)) return true;
+  // Or check for our custom marker
+  if (/KanchaeumApp/.test(ua)) return true;
+  return false;
+}
+
+/** Get APK version. Returns "0.0.0" for old APKs without version injection. */
 function getApkVersion(): string | null {
-  if (typeof window === "undefined") return null;
-  // Check JavaScript interface (Android WebView)
+  if (!isAndroidWebView()) return null;
+  // Check JavaScript interface (new APK v1.4.0+)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const win = window as any;
   if (win.KanchaeumNative?.getVersion) {
     return win.KanchaeumNative.getVersion();
   }
-  // Check user agent
+  // Check user agent marker (new APK v1.4.0+)
   const match = navigator.userAgent.match(/KanchaeumApp\/([\d.]+)/);
-  return match ? match[1] : null;
+  if (match) return match[1];
+  // Old APK without version injection - treat as 0.0.0 (always needs update)
+  return "0.0.0";
 }
 
 function compareVersions(a: string, b: string): number {
