@@ -65,6 +65,22 @@ export function checkAchievements(stats: UserStats, currentAchievements: Achieve
       case 'combo_5': case 'combo_10': case 'combo_15': case 'combo_20': case 'combo_30':
         progress = stats.maxCombo;
         break;
+      case 'speed_easy_3m': case 'speed_medium_5m': case 'speed_hard_10m': case 'speed_expert_15m': case 'speed_master_20m': {
+        // Speed achievements unlock when the best time is at or under the
+        // requirement (fewer seconds = better), which inverts the usual
+        // "progress >= requirement" rule — so map a qualifying best time to the
+        // requirement value and everything else to 0.
+        const speedDiff: Record<string, keyof typeof stats.bestTimes> = {
+          speed_easy_3m: 'easy',
+          speed_medium_5m: 'medium',
+          speed_hard_10m: 'hard',
+          speed_expert_15m: 'expert',
+          speed_master_20m: 'master',
+        };
+        const best = stats.bestTimes[speedDiff[ach.id]] ?? 0;
+        progress = best > 0 && best <= ach.requirement ? ach.requirement : 0;
+        break;
+      }
       case 'perfect_1': case 'perfect_10': case 'perfect_50':
         progress = stats.perfectGames;
         break;
@@ -74,8 +90,11 @@ export function checkAchievements(stats: UserStats, currentAchievements: Achieve
       case 'perfect_master':
         progress = (stats.perfectGamesByDifficulty?.master ?? 0) >= 1 ? 1 : 0;
         break;
-      case 'daily_1': case 'daily_7': case 'daily_30': case 'daily_100': case 'daily_bonus_all':
+      case 'daily_1': case 'daily_7': case 'daily_30': case 'daily_100':
         progress = stats.dailyChallengesCompleted;
+        break;
+      case 'daily_bonus_all':
+        progress = stats.dailyBonusCompleted ?? 0;
         break;
       case 'brain_300': case 'brain_600': case 'brain_900':
         progress = stats.brainScore;

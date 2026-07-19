@@ -49,3 +49,4 @@ android/local.properties
 # old twa build
 twa-build/
 nul
+.claude/

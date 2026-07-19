@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   CellValue,
   Difficulty,
@@ -13,11 +14,13 @@ import { generatePuzzle, generateDailyPuzzle } from '@/lib/sudoku/generator';
 import { isCellCorrect, isBoardComplete } from '@/lib/sudoku/validator';
 import { getHint } from '@/lib/sudoku/solver';
 import { calculateFinalScore } from '@/lib/game/scoring';
+import { kstToday } from '@/lib/game/daily';
 import {
   updateComboOnCorrect,
   resetCombo,
   createInitialComboState,
   getComboTier,
+  isComboExpired,
 } from '@/lib/game/combo';
 import { soundManager } from '@/lib/audio/soundManager';
 import { hapticLight, hapticMedium, hapticSuccess, hapticError, hapticHeavy } from '@/lib/utils/haptic';
@@ -44,6 +47,16 @@ function cloneBoard(board: Board): Board {
 
 function cloneNotes(notes: Notes): Notes {
   return notes.map((row) => row.map((cell) => new Set(cell)));
+}
+
+/**
+ * Monotonic clock reading. Immune to system-clock changes, so elapsed time and
+ * combo windows cannot be manipulated by rewinding the device clock.
+ */
+function perfNow(): number {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
 }
 
 /** Remove a candidate number from all notes in the same row, column, and box. */
@@ -81,6 +94,32 @@ function removeNoteFromPeers(
 
 const MAX_MISTAKES = 3;
 const MAX_HINTS = 3;
+const MAX_HISTORY = 300;
+
+/** Append an action to history, truncating redo tail and capping total length. */
+function appendHistory(history: GameAction[], historyIndex: number, action: GameAction) {
+  let next = [...history.slice(0, historyIndex + 1), action];
+  if (next.length > MAX_HISTORY) next = next.slice(next.length - MAX_HISTORY);
+  return { history: next, historyIndex: next.length - 1 };
+}
+
+// ---------------------------------------------------------------------------
+// Deferred puzzle generation
+// ---------------------------------------------------------------------------
+// A true Web Worker isn't reliable under Next's static (output: export) +
+// Turbopack build — the worker ships as raw TS and fails to load. Instead we
+// paint the "generating" spinner first, then run generation on the next frame
+// so the UI isn't visibly frozen while expert/master puzzles are built.
+
+let genRequestId = 0;
+
+function scheduleGeneration(run: () => void) {
+  if (typeof requestAnimationFrame !== 'undefined') {
+    requestAnimationFrame(() => setTimeout(run, 0));
+  } else {
+    setTimeout(run, 0);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Store interface
@@ -95,7 +134,12 @@ export interface GameStore {
   history: GameAction[];
   historyIndex: number;
   status: GameStatus;
+  /** Wall-clock start (Date.now) — kept only for puzzle id / display, never for scoring. */
   startTime: number;
+  /** Committed play time in ms from finished run segments (pauses/freezes). */
+  accumulatedMs: number;
+  /** Monotonic timestamp when the current active run segment started (0 = inactive). */
+  runStartPerf: number;
   elapsedTime: number;
   mistakes: number;
   maxMistakes: number;
@@ -108,10 +152,14 @@ export interface GameStore {
   combo: ComboState;
   maxCombo: number;
 
-  // --- Power-up state ---
-  timerFrozenUntil: number;
-  comboBoostUntil: number;
+  // --- Power-up state (monotonic timestamps) ---
+  frozenUntilPerf: number;
+  comboBoostUntilPerf: number;
   errorHighlights: { row: number; col: number }[];
+
+  // --- Leaderboard anti-cheat session token ---
+  sessionToken: string | null;
+  requestSession: (difficulty: Difficulty) => void;
 
   // --- Actions ---
   startNewGame: (difficulty: Difficulty) => void;
@@ -136,6 +184,7 @@ export interface GameStore {
   freezeTimer: () => void;
   activateComboBoost: () => void;
   undoMistake: () => void;
+  reviveGame: () => void;
   resetToIdle: () => void;
   getGameResult: () => {
     difficulty: Difficulty;
@@ -167,6 +216,8 @@ function getInitialState() {
     historyIndex: -1,
     status: 'idle' as GameStatus,
     startTime: 0,
+    accumulatedMs: 0,
+    runStartPerf: 0,
     elapsedTime: 0,
     mistakes: 0,
     maxMistakes: MAX_MISTAKES,
@@ -178,17 +229,42 @@ function getInitialState() {
     difficulty: 'medium' as Difficulty,
     combo: createInitialComboState(),
     maxCombo: 0,
-    timerFrozenUntil: 0,
-    comboBoostUntil: 0,
+    frozenUntilPerf: 0,
+    comboBoostUntilPerf: 0,
     errorHighlights: [],
+    sessionToken: null as string | null,
   };
+}
+
+/** Current elapsed play time in ms, derived from the monotonic clock. */
+function computeElapsedMs(state: {
+  accumulatedMs: number;
+  runStartPerf: number;
+  frozenUntilPerf: number;
+}): number {
+  if (state.runStartPerf <= 0) return state.accumulatedMs;
+  const now = perfNow();
+  if (state.frozenUntilPerf > now) return state.accumulatedMs;
+  return state.accumulatedMs + (now - state.runStartPerf);
 }
 
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
-export const useGameStore = create<GameStore>((set, get) => ({
+// Set instances don't survive JSON — tag them on write, revive on read.
+const jsonReplacer = (_key: string, value: unknown) =>
+  value instanceof Set ? { __t: 'set', v: [...value] } : value;
+const jsonReviver = (_key: string, value: unknown) => {
+  if (value && typeof value === 'object' && (value as { __t?: string }).__t === 'set') {
+    return new Set((value as { v: number[] }).v);
+  }
+  return value;
+};
+
+export const useGameStore = create<GameStore>()(
+  persist(
+    (set, get) => ({
   ...getInitialState(),
 
   // -----------------------------------------------------------------------
@@ -196,61 +272,99 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // -----------------------------------------------------------------------
 
   startNewGame: (difficulty: Difficulty) => {
-    const { puzzle, solution } = generatePuzzle(difficulty);
-
-    const puzzleObj: Puzzle = {
-      id: `${difficulty}-${Date.now()}`,
-      board: puzzle,
-      solution,
-      difficulty,
-      createdAt: new Date().toISOString(),
+    const applyPuzzle = (board: Board, solution: Board) => {
+      const puzzleObj: Puzzle = {
+        id: `${difficulty}-${Date.now()}`,
+        board,
+        solution,
+        difficulty,
+        createdAt: new Date().toISOString(),
+      };
+      set({
+        ...getInitialState(),
+        puzzle: puzzleObj,
+        currentBoard: cloneBoard(board),
+        difficulty,
+        status: 'playing',
+        startTime: Date.now(),
+        runStartPerf: perfNow(),
+      });
+      get().requestSession(difficulty);
     };
 
-    set({
-      ...getInitialState(),
-      puzzle: puzzleObj,
-      currentBoard: cloneBoard(puzzle),
-      difficulty,
-      status: 'playing',
-      startTime: Date.now(),
+    // Paint the generating spinner, then build on the next frame.
+    set({ ...getInitialState(), difficulty, status: 'generating' });
+    const id = ++genRequestId;
+    scheduleGeneration(() => {
+      if (get().status !== 'generating' || genRequestId !== id) return;
+      const { puzzle, solution } = generatePuzzle(difficulty);
+      applyPuzzle(puzzle, solution);
     });
   },
 
-  startDailyChallenge: () => {
-    const today = new Date();
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const { puzzle, solution } = generateDailyPuzzle(dateStr);
+  requestSession: (difficulty: Difficulty) => {
+    // Fire-and-forget: ask the server for a signed play-session token so the
+    // eventual score submission can be verified. Failures are ignored (offline).
+    if (typeof fetch === 'undefined') return;
+    fetch('/api/leaderboard?action=session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ difficulty }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.token === 'string') set({ sessionToken: data.token });
+      })
+      .catch(() => { /* offline / static hosting without functions */ });
+  },
 
-    const puzzleObj: Puzzle = {
-      id: `daily-${dateStr}`,
-      board: puzzle,
-      solution,
-      difficulty: 'medium',
-      createdAt: new Date().toISOString(),
-      seed: parseInt(dateStr.replace(/-/g, ''), 10),
+  startDailyChallenge: () => {
+    const dateStr = kstToday();
+
+    const applyDaily = (board: Board, solution: Board) => {
+      const puzzleObj: Puzzle = {
+        id: `daily-${dateStr}`,
+        board,
+        solution,
+        difficulty: 'medium',
+        createdAt: new Date().toISOString(),
+        seed: parseInt(dateStr.replace(/-/g, ''), 10),
+      };
+      set({
+        ...getInitialState(),
+        puzzle: puzzleObj,
+        currentBoard: cloneBoard(board),
+        difficulty: 'medium',
+        status: 'playing',
+        startTime: Date.now(),
+        runStartPerf: perfNow(),
+      });
+      get().requestSession('medium');
     };
 
-    set({
-      ...getInitialState(),
-      puzzle: puzzleObj,
-      currentBoard: cloneBoard(puzzle),
-      difficulty: 'medium',
-      status: 'playing',
-      startTime: Date.now(),
+    set({ ...getInitialState(), difficulty: 'medium', status: 'generating' });
+    const id = ++genRequestId;
+    scheduleGeneration(() => {
+      if (get().status !== 'generating' || genRequestId !== id) return;
+      const { puzzle, solution } = generateDailyPuzzle(dateStr);
+      applyDaily(puzzle, solution);
     });
   },
 
   pauseGame: () => {
-    const { status } = get();
+    const { status, accumulatedMs, runStartPerf, frozenUntilPerf } = get();
     if (status === 'playing') {
-      set({ status: 'paused' });
+      // Commit the current run segment so paused time is excluded from elapsed.
+      const now = perfNow();
+      const segment = runStartPerf > 0 && frozenUntilPerf <= now ? now - runStartPerf : 0;
+      set({ status: 'paused', accumulatedMs: accumulatedMs + segment, runStartPerf: 0 });
     }
   },
 
   resumeGame: () => {
     const { status } = get();
     if (status === 'paused') {
-      set({ status: 'playing' });
+      set({ status: 'playing', runStartPerf: perfNow() });
     }
   },
 
@@ -289,6 +403,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       historyIndex,
       mistakes,
       maxMistakes,
+      hintsUsed,
       combo,
       maxCombo,
     } = get();
@@ -309,7 +424,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const prevValue = currentBoard[row][col];
     const prevNotes = Array.from(notes[row][col]);
 
-    // Create action for history (truncate any redo history)
+    // Create action for history (truncate any redo history). The progression
+    // snapshot captures state BEFORE this move so undo restores it exactly,
+    // preventing undo→re-place combo farming.
     const action: GameAction = {
       type: 'place',
       row,
@@ -319,8 +436,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       prevNotes,
       newNotes: [],
       timestamp: Date.now(),
+      prevCombo: { ...combo },
+      prevMaxCombo: maxCombo,
+      prevMistakes: mistakes,
+      prevHintsUsed: hintsUsed,
     };
-    const newHistory = [...history.slice(0, historyIndex + 1), action];
+    const { history: newHistory } = appendHistory(history, historyIndex, action);
 
     // Place the number
     const newBoard = cloneBoard(currentBoard);
@@ -337,9 +458,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // Auto-remove this number from notes in same row/col/box
       newNotes = removeNoteFromPeers(newNotes, row, col, num);
 
-      // Update combo (with boost if active)
-      let newCombo = updateComboOnCorrect(combo, Date.now());
-      if (get().comboBoostUntil > Date.now()) {
+      // Update combo (with boost if active). Uses the monotonic clock so the
+      // combo window can't be manipulated via the system clock. Expiry is also
+      // evaluated here — not just in tick() — so a combo that lapsed while the
+      // tab was throttled restarts at 1 instead of continuing.
+      const nowPerf = perfNow();
+      const activeCombo = isComboExpired(combo, nowPerf) ? resetCombo() : combo;
+      let newCombo = updateComboOnCorrect(activeCombo, nowPerf);
+      if (get().comboBoostUntilPerf > nowPerf) {
         newCombo = { ...newCombo, multiplier: newCombo.multiplier * 2 };
       }
       const newMaxCombo = Math.max(maxCombo, newCombo.current);
@@ -365,8 +491,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         highlightedNumber: num as CellValue,
       });
 
-      // Check for completion celebrations (row/col/box/number)
-      const completions = checkCompletions(newBoard, row, col);
+      // Check for completion celebrations (row/col/box/number) — only real,
+      // solution-matching completions trigger a celebration.
+      const completions = checkCompletions(newBoard, row, col, puzzle.solution);
       for (const c of completions) {
         if (c.type === 'number') {
           toast(`숫자 ${c.index} 완성!`, { icon: '🎯' });
@@ -407,11 +534,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
         highlightedNumber: num as CellValue,
       });
 
-      // Check if game failed
+      // Check if game failed — freeze the clock so revive resumes from the
+      // exact game-over time, not inflated by idle time on the failed screen.
       if (newMistakes >= maxMistakes) {
         soundManager.play('wrong');
         hapticHeavy();
-        set({ status: 'failed' });
+        const elapsedMs = computeElapsedMs(get());
+        set({
+          status: 'failed',
+          accumulatedMs: elapsedMs,
+          elapsedTime: Math.max(0, Math.floor(elapsedMs / 1000)),
+          runStartPerf: 0,
+        });
       }
     }
   },
@@ -421,7 +555,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // -----------------------------------------------------------------------
 
   eraseNumber: () => {
-    const { puzzle, currentBoard, notes, selectedCell, status, history, historyIndex } = get();
+    const { puzzle, currentBoard, notes, selectedCell, status, history, historyIndex, combo, maxCombo, mistakes, hintsUsed } = get();
 
     if (!puzzle || !selectedCell || status !== 'playing') return;
 
@@ -445,8 +579,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       prevNotes: prevNotesList,
       newNotes: [],
       timestamp: Date.now(),
+      prevCombo: { ...combo },
+      prevMaxCombo: maxCombo,
+      prevMistakes: mistakes,
+      prevHintsUsed: hintsUsed,
     };
-    const newHistory = [...history.slice(0, historyIndex + 1), action];
+    const { history: newHistory } = appendHistory(history, historyIndex, action);
 
     const newBoard = cloneBoard(currentBoard);
     newBoard[row][col] = 0;
@@ -470,7 +608,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // -----------------------------------------------------------------------
 
   toggleNote: (num: number) => {
-    const { puzzle, currentBoard, notes, selectedCell, status, history, historyIndex } = get();
+    const { puzzle, currentBoard, notes, selectedCell, status, history, historyIndex, combo, maxCombo, mistakes, hintsUsed } = get();
 
     if (!puzzle || status !== 'playing') return;
 
@@ -504,8 +642,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       prevNotes: prevNotesList,
       newNotes: newNotesList,
       timestamp: Date.now(),
+      prevCombo: { ...combo },
+      prevMaxCombo: maxCombo,
+      prevMistakes: mistakes,
+      prevHintsUsed: hintsUsed,
     };
-    const newHistory = [...history.slice(0, historyIndex + 1), action];
+    const { history: newHistory } = appendHistory(history, historyIndex, action);
 
     soundManager.play('tap');
 
@@ -544,11 +686,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     soundManager.play('undo');
 
+    // Restore the pre-action combo snapshot so undo can't farm combo. Mistakes
+    // and hints are deliberately NOT restored: undoing a wrong entry or a hint
+    // must not refund its cost (otherwise mistakes/hints could be zeroed out by
+    // undo→re-enter, forging perfect/no-hint bonuses).
     set({
       currentBoard: newBoard,
       notes: newNotes,
       historyIndex: historyIndex - 1,
       highlightedNumber: action.prevValue,
+      ...(action.prevCombo ? { combo: { ...action.prevCombo } } : {}),
+      ...(action.prevMaxCombo !== undefined ? { maxCombo: action.prevMaxCombo } : {}),
     });
   },
 
@@ -568,11 +716,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     soundManager.play('tap');
 
+    // Re-applying an action never restores a combo (that would resurrect a
+    // farmed combo). Mistakes/hints are left as-is — they were never refunded
+    // by undo, so there's nothing to re-charge here.
     set({
       currentBoard: newBoard,
       notes: newNotes,
       historyIndex: historyIndex + 1,
       highlightedNumber: action.newValue,
+      combo: resetCombo(),
     });
   },
 
@@ -591,6 +743,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       history,
       historyIndex,
       combo,
+      maxCombo,
+      mistakes,
     } = get();
 
     if (!puzzle || status !== 'playing' || hintsUsed >= maxHints) return;
@@ -611,8 +765,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       prevNotes: prevNotesList,
       newNotes: [],
       timestamp: Date.now(),
+      prevCombo: { ...combo },
+      prevMaxCombo: maxCombo,
+      prevMistakes: mistakes,
+      prevHintsUsed: hintsUsed,
     };
-    const newHistory = [...history.slice(0, historyIndex + 1), action];
+    const { history: newHistory } = appendHistory(history, historyIndex, action);
 
     const newBoard = cloneBoard(currentBoard);
     newBoard[row][col] = value;
@@ -650,36 +808,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // -----------------------------------------------------------------------
 
   tick: () => {
-    const { status, startTime, combo, timerFrozenUntil } = get();
+    const state = get();
+    const { status, combo, frozenUntilPerf, runStartPerf, accumulatedMs } = state;
 
     if (status !== 'playing') return;
 
-    const now = Date.now();
+    const now = perfNow();
 
-    // If timer is frozen, advance startTime to keep elapsed the same
-    if (timerFrozenUntil > now) {
-      set({ startTime: startTime + 1000 });
-      // Still process combo decay below
+    // When a freeze expires, restart the active segment so the frozen span is
+    // excluded from elapsed time (no clock-arithmetic hacks).
+    let nextRunStart = runStartPerf;
+    if (frozenUntilPerf > 0 && now >= frozenUntilPerf) {
+      set({ frozenUntilPerf: 0, runStartPerf: now });
+      nextRunStart = now;
     }
 
-    const elapsed = Math.floor((now - (timerFrozenUntil > now ? startTime + 1000 : startTime)) / 1000);
+    const elapsedMs = computeElapsedMs({
+      accumulatedMs,
+      runStartPerf: nextRunStart,
+      frozenUntilPerf: get().frozenUntilPerf,
+    });
+    const elapsed = Math.max(0, Math.floor(elapsedMs / 1000));
 
-    // Decay combo timer
-    let newCombo = { ...combo };
-    if (newCombo.current > 0 && newCombo.timer > 0) {
-      // Each tick is ~1 second, subtract 1000ms
-      newCombo = {
-        ...newCombo,
-        timer: Math.max(0, newCombo.timer - 1000),
-      };
-
-      // If timer expired, reset combo
-      if (newCombo.timer <= 0) {
-        if (combo.current > 0) {
-          soundManager.play('comboBreak');
-        }
-        newCombo = resetCombo();
-      }
+    // Combo expiry judged by real elapsed time since the last correct entry.
+    let newCombo = combo;
+    if (isComboExpired(combo, now)) {
+      if (combo.current > 0) soundManager.play('comboBreak');
+      newCombo = resetCombo();
     }
 
     set({
@@ -702,6 +857,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (complete) {
       soundManager.play('complete');
       hapticHeavy();
+
+      // Freeze final elapsed time from the monotonic clock before scoring.
+      const finalElapsed = Math.max(0, Math.floor(computeElapsedMs(get()) / 1000));
+      set({ elapsedTime: finalElapsed, runStartPerf: 0 });
 
       const result = get().getGameResult();
       set({
@@ -745,7 +904,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // -----------------------------------------------------------------------
 
   revealCell: () => {
-    const { puzzle, currentBoard, notes, status, history, historyIndex } = get();
+    const { puzzle, currentBoard, notes, status, history, historyIndex, combo, maxCombo, mistakes, hintsUsed } = get();
     if (!puzzle || status !== 'playing') return;
 
     // Find all empty cells
@@ -773,8 +932,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       prevNotes: prevNotesList,
       newNotes: [],
       timestamp: Date.now(),
+      prevCombo: { ...combo },
+      prevMaxCombo: maxCombo,
+      prevMistakes: mistakes,
+      prevHintsUsed: hintsUsed,
     };
-    const newHistory = [...history.slice(0, historyIndex + 1), action];
+    const { history: newHistory } = appendHistory(history, historyIndex, action);
 
     const newBoard = cloneBoard(currentBoard);
     newBoard[target.row][target.col] = value;
@@ -828,14 +991,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   freezeTimer: () => {
-    const { status } = get();
+    const { status, accumulatedMs, runStartPerf, frozenUntilPerf } = get();
     if (status !== 'playing') return;
 
     soundManager.play('powerup');
     hapticSuccess();
     toast('30초 동안 타이머가 정지됩니다!', { icon: '❄️' });
 
-    set({ timerFrozenUntil: Date.now() + 30000 });
+    // Commit the current run segment, then start the frozen window.
+    const now = perfNow();
+    const segment = runStartPerf > 0 && frozenUntilPerf <= now ? now - runStartPerf : 0;
+    set({
+      accumulatedMs: accumulatedMs + segment,
+      runStartPerf: now,
+      frozenUntilPerf: now + 30000,
+    });
   },
 
   activateComboBoost: () => {
@@ -846,7 +1016,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     hapticSuccess();
     toast('60초 동안 콤보 배율 2배!', { icon: '🚀' });
 
-    set({ comboBoostUntil: Date.now() + 60000 });
+    set({ comboBoostUntilPerf: perfNow() + 60000 });
   },
 
   undoMistake: () => {
@@ -860,7 +1030,88 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ mistakes: mistakes - 1 });
   },
 
+  reviveGame: () => {
+    // Continue a lost game with one mistake slot back. Payment (coins/ad) is
+    // handled by the caller; this only restores the playable state.
+    const { status } = get();
+    if (status !== 'failed') return;
+    soundManager.play('powerup');
+    hapticSuccess();
+    // Commit elapsed time accrued up to the game-over point before restarting
+    // the active segment, so revive doesn't reset the timer to zero.
+    const elapsedMs = computeElapsedMs(get());
+    set({
+      accumulatedMs: elapsedMs,
+      elapsedTime: Math.max(0, Math.floor(elapsedMs / 1000)),
+      mistakes: Math.max(0, MAX_MISTAKES - 1),
+      status: 'playing',
+      runStartPerf: perfNow(),
+      frozenUntilPerf: 0,
+    });
+  },
+
   resetToIdle: () => {
     set(getInitialState());
   },
-}));
+    }),
+    {
+      name: 'numero-quest-game',
+      version: 1,
+      storage: createJSONStorage(() => localStorage, {
+        replacer: jsonReplacer,
+        reviver: jsonReviver,
+      }),
+      // Persist only the in-progress game; monotonic timestamps are session-
+      // relative and must never be restored across reloads.
+      partialize: (s) => ({
+        puzzle: s.puzzle,
+        currentBoard: s.currentBoard,
+        notes: s.notes,
+        selectedCell: s.selectedCell,
+        history: s.history,
+        historyIndex: s.historyIndex,
+        status: s.status,
+        startTime: s.startTime,
+        accumulatedMs: s.accumulatedMs,
+        elapsedTime: s.elapsedTime,
+        mistakes: s.mistakes,
+        hintsUsed: s.hintsUsed,
+        difficulty: s.difficulty,
+        combo: s.combo,
+        maxCombo: s.maxCombo,
+        isNotesMode: s.isNotesMode,
+        sessionToken: s.sessionToken,
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        // A puzzle that was mid-generation at reload can't be resumed.
+        if (state.status === 'generating' || !state.puzzle) {
+          state.status = 'idle';
+          return;
+        }
+        // Resume as paused so the resume dialog appears; reset session clocks.
+        if (state.status === 'playing') {
+          state.status = 'paused';
+        }
+        // elapsedTime is the persisted source of truth for prior play time; fold
+        // it into accumulatedMs so the monotonic clock continues from there
+        // instead of restarting at zero after a reload.
+        state.accumulatedMs = Math.max(0, Math.round((state.elapsedTime ?? 0) * 1000));
+        state.runStartPerf = 0;
+        state.frozenUntilPerf = 0;
+        state.comboBoostUntilPerf = 0;
+        state.errorHighlights = [];
+        // combo.lastCorrectTime is a performance.now() value (session-relative);
+        // it's meaningless after a reload and would otherwise make the restored
+        // combo never expire. Reset the live combo and neutralize the same
+        // timestamp inside undo snapshots.
+        state.combo = createInitialComboState();
+        if (Array.isArray(state.history)) {
+          state.history = state.history.map((a) =>
+            a.prevCombo ? { ...a, prevCombo: createInitialComboState() } : a,
+          );
+        }
+      },
+    },
+  ),
+);

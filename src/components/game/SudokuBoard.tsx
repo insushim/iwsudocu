@@ -73,7 +73,10 @@ export default function SudokuBoard() {
           !isSelected;
         const isConflict = conflicts[r][c];
         const isErrorHighlight = errorSet.has(`${r}-${c}`);
-        const cellNotes = notes[r][c] ? Array.from(notes[r][c]) : [];
+        // Stable primitive key so an unchanged cell's memoized render is reused.
+        const notesKey = notes[r][c] && notes[r][c].size > 0
+          ? Array.from(notes[r][c]).sort((a, b) => a - b).join(',')
+          : '';
 
         items.push(
           <SudokuCell
@@ -89,7 +92,7 @@ export default function SudokuBoard() {
             isSameBox={isSameBox}
             isConflict={isConflict}
             isErrorHighlight={isErrorHighlight}
-            notes={cellNotes}
+            notesKey={notesKey}
             theme={theme}
           />,
         );

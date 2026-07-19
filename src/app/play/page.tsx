@@ -21,6 +21,8 @@ import { XCircle, Home, RotateCcw, PlayCircle, PlusCircle } from 'lucide-react';
 import { bgmManager } from '@/lib/audio/bgmManager';
 import { DIFFICULTY_CONFIGS } from '@/lib/utils/constants';
 import { formatTime } from '@/lib/utils/format';
+import { kstToday } from '@/lib/game/daily';
+import toast from 'react-hot-toast';
 import type { Difficulty } from '@/types';
 
 export default function PlayPage() {
@@ -31,6 +33,19 @@ export default function PlayPage() {
   const getGameResult = useGameStore((s) => s.getGameResult);
   const recordGameResult = useUserStore((s) => s.recordGameResult);
   const recordStreak = useUserStore((s) => s.recordStreak);
+  const reviveGame = useGameStore((s) => s.reviveGame);
+  const spendCoins = useUserStore((s) => s.spendCoins);
+  const coins = useUserStore((s) => s.profile.coins);
+
+  const REVIVE_COST = 150;
+  const handleRevive = useCallback(() => {
+    if (spendCoins(REVIVE_COST)) {
+      resultRecorded.current = false;
+      reviveGame();
+    } else {
+      toast('코인이 부족합니다.', { icon: '🪙' });
+    }
+  }, [spendCoins, reviveGame]);
 
   // On mount: if game was completed/failed, reset to idle for fresh start
   const [showResumeDialog, setShowResumeDialog] = useState(() => {
@@ -73,7 +88,10 @@ export default function PlayPage() {
         const puzzleId = useGameStore.getState().puzzle?.id ?? '';
         const isDaily = puzzleId.startsWith('daily-');
 
-        recordGameResult({
+        // Update the streak first so this game's reward multiplier and any
+        // streak-milestone achievement reflect today's completion immediately.
+        recordStreak();
+        const outcome = recordGameResult({
           difficulty: result.difficulty,
           timeInSeconds: result.timeInSeconds,
           mistakes: result.mistakes,
@@ -82,7 +100,19 @@ export default function PlayPage() {
           totalScore: result.totalScore,
           isDaily,
         });
-        recordStreak();
+
+        if (outcome.dailyBonusAwarded) {
+          toast(
+            `보너스 달성! ${outcome.dailyBonusAwarded.descriptionKo} (+${outcome.dailyBonusAwarded.xp} XP)`,
+            { icon: '🎁', duration: 4000 },
+          );
+        }
+        if (outcome.leveledUp) {
+          toast(`레벨 ${outcome.newLevel} 달성!`, { icon: '🎉', duration: 4000 });
+        }
+        for (const ach of outcome.newlyUnlocked) {
+          toast(`업적 해금: ${ach.nameKo}`, { icon: ach.icon || '🏆', duration: 4000 });
+        }
       }
     }
     if (status === 'idle') {
@@ -96,8 +126,7 @@ export default function PlayPage() {
     if (!result) return;
     const puzzleId = useGameStore.getState().puzzle?.id ?? '';
     const isDaily = puzzleId.startsWith('daily-');
-    const today = new Date();
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const dateStr = kstToday();
     fetch('/api/leaderboard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -111,6 +140,7 @@ export default function PlayPage() {
         is_perfect: result.mistakes === 0 ? 1 : 0,
         is_daily: isDaily ? 1 : 0,
         daily_date: isDaily ? dateStr : undefined,
+        session_token: useGameStore.getState().sessionToken ?? undefined,
       }),
     }).catch(() => { /* silently fail for offline */ });
   }, [getGameResult]);
@@ -225,6 +255,16 @@ export default function PlayPage() {
     );
   }
 
+  // Generating: puzzle is being created off the main thread
+  if (status === 'generating') {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 pt-16">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/10 border-t-indigo-400" />
+        <p className="text-sm text-slate-400">퍼즐을 생성하는 중...</p>
+      </div>
+    );
+  }
+
   // Active game (playing/paused)
   const isGameActive = status === 'playing' || status === 'paused';
 
@@ -261,8 +301,20 @@ export default function PlayPage() {
         <div className="flex flex-col items-center space-y-4">
           <XCircle className="h-16 w-16 text-red-400" />
           <p className="text-center text-slate-300">
-            실수가 너무 많았습니다. 다시 도전해 보세요!
+            실수가 너무 많았습니다. 이어서 도전하거나 새로 시작하세요!
           </p>
+
+          {/* Revive: continue this puzzle with one mistake slot back */}
+          <Button
+            variant="primary"
+            onClick={handleRevive}
+            className="w-full"
+            disabled={coins < REVIVE_COST}
+          >
+            <PlayCircle className="h-4 w-4" />
+            이어하기 (코인 {REVIVE_COST})
+          </Button>
+
           <div className="flex w-full gap-3">
             <Button
               variant="secondary"
@@ -273,7 +325,7 @@ export default function PlayPage() {
               홈으로
             </Button>
             <Button
-              variant="primary"
+              variant="secondary"
               onClick={handleNewGame}
               className="flex-1"
             >

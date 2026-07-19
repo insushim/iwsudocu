@@ -8,15 +8,36 @@ import {
   PowerUp,
   StreakData,
   Difficulty,
+  WeeklyMission,
+  WeeklyMissionState,
 } from '@/types';
 import { calculateLevel } from '@/lib/game/leveling';
+import { calculateRewards } from '@/lib/game/scoring';
 import { updateStreak, getStreakMultiplier, getStreakMilestoneReward } from '@/lib/game/streak';
+import { getDailyBonus, checkDailyBonus, getWeekId, getWeeklyMissionTemplates, kstToday } from '@/lib/game/daily';
 import { ALL_ACHIEVEMENTS, checkAchievements } from '@/lib/game/achievements';
 import { calculateBrainScore } from '@/lib/game/brainScore';
 import { soundManager } from '@/lib/audio/soundManager';
 import { bgmManager } from '@/lib/audio/bgmManager';
 import { setHapticEnabled } from '@/lib/utils/haptic';
 import { useGameStore } from '@/lib/store/gameStore';
+import toast from 'react-hot-toast';
+
+function buildWeeklyMissions(weekId: string): WeeklyMissionState {
+  return {
+    weekId,
+    missions: getWeeklyMissionTemplates(weekId).map((t) => ({
+      id: t.id,
+      descriptionKo: t.descriptionKo,
+      type: t.type,
+      target: t.target,
+      progress: 0,
+      xpReward: t.xpReward,
+      coinReward: t.coinReward,
+      claimed: false,
+    })),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -67,6 +88,7 @@ const DEFAULT_STATS: UserStats = {
   },
   winRate: 0,
   brainScore: 0,
+  dailyBonusCompleted: 0,
 };
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -90,6 +112,7 @@ const DEFAULT_STREAK: StreakData = {
   streakHistory: [],
   streakFreezeCount: 0,
   isStreakActive: false,
+  claimedMilestones: [],
 };
 
 function createDefaultPowerUps(): PowerUp[] {
@@ -193,12 +216,22 @@ function createDefaultProfile(): UserProfile {
     powerUps: createDefaultPowerUps(),
     settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date().toISOString(),
+    dailyCompletedDates: [],
   };
 }
 
 // ---------------------------------------------------------------------------
 // Store interface
 // ---------------------------------------------------------------------------
+
+export interface RewardOutcome {
+  newlyUnlocked: Achievement[];
+  earnedXP: number;
+  earnedCoins: number;
+  leveledUp: boolean;
+  newLevel: number;
+  dailyBonusAwarded: { xp: number; coins: number; descriptionKo: string } | null;
+}
 
 export interface UserStore {
   profile: UserProfile;
@@ -211,6 +244,10 @@ export interface UserStore {
   // Streak
   recordStreak: () => void;
 
+  // Weekly missions
+  getWeeklyMissions: () => WeeklyMission[];
+  claimWeeklyMission: (id: string) => boolean;
+
   // Game result
   recordGameResult: (result: {
     difficulty: Difficulty;
@@ -220,7 +257,7 @@ export interface UserStore {
     maxCombo: number;
     totalScore: number;
     isDaily?: boolean;
-  }) => Achievement[];
+  }) => RewardOutcome;
 
   // Settings
   updateSettings: (settings: Partial<UserSettings>) => void;
@@ -302,15 +339,25 @@ export const useUserStore = create<UserStore>()(
 
       recordStreak: () => {
         set((state) => {
-          const newStreak = updateStreak(state.profile.streak);
-          const milestone = getStreakMilestoneReward(newStreak.currentStreak);
+          const prev = state.profile.streak;
+          const newStreak = updateStreak(prev, kstToday());
+
+          // Streak did not actually advance today (same day re-completion or a
+          // rewound clock) → pay no milestone. This closes the duplicate-claim
+          // exploit where replaying a puzzle re-awarded the same milestone.
+          const advanced = newStreak.lastPlayDate !== prev.lastPlayDate;
+          const claimed = newStreak.claimedMilestones ?? [];
+          const milestone = advanced ? getStreakMilestoneReward(newStreak.currentStreak) : null;
+          const alreadyClaimed = milestone ? claimed.includes(newStreak.currentStreak) : true;
 
           let bonusXP = 0;
           let bonusCoins = 0;
+          let nextClaimed = claimed;
 
-          if (milestone) {
+          if (milestone && !alreadyClaimed) {
             bonusXP = milestone.xp;
             bonusCoins = milestone.coins;
+            nextClaimed = [...claimed, newStreak.currentStreak];
             soundManager.play('streak');
           }
 
@@ -320,7 +367,7 @@ export const useUserStore = create<UserStore>()(
           return {
             profile: {
               ...state.profile,
-              streak: newStreak,
+              streak: { ...newStreak, claimedMilestones: nextClaimed },
               totalXP: newTotalXP,
               coins: state.profile.coins + bonusCoins,
               level: levelData.level,
@@ -335,18 +382,63 @@ export const useUserStore = create<UserStore>()(
       },
 
       // -------------------------------------------------------------------
+      // Weekly missions
+      // -------------------------------------------------------------------
+
+      getWeeklyMissions: () => {
+        const weekId = getWeekId(new Date());
+        const wm = get().profile.weeklyMissions;
+        if (!wm || wm.weekId !== weekId) {
+          const fresh = buildWeeklyMissions(weekId);
+          set((state) => ({ profile: { ...state.profile, weeklyMissions: fresh } }));
+          return fresh.missions;
+        }
+        return wm.missions;
+      },
+
+      claimWeeklyMission: (id: string) => {
+        const { profile } = get();
+        const wm = profile.weeklyMissions;
+        if (!wm) return false;
+        const mission = wm.missions.find((m) => m.id === id);
+        if (!mission || mission.claimed || mission.progress < mission.target) return false;
+
+        const newTotalXP = profile.totalXP + mission.xpReward;
+        const levelData = calculateLevel(newTotalXP);
+        set((state) => ({
+          profile: {
+            ...state.profile,
+            totalXP: newTotalXP,
+            level: levelData.level,
+            coins: state.profile.coins + mission.coinReward,
+            weeklyMissions: {
+              ...wm,
+              missions: wm.missions.map((m) => (m.id === id ? { ...m, claimed: true } : m)),
+            },
+          },
+        }));
+        soundManager.play('achievement');
+        return true;
+      },
+
+      // -------------------------------------------------------------------
       // Record game result
       // -------------------------------------------------------------------
 
       recordGameResult: (result) => {
         const { profile } = get();
 
-        // 1. Calculate XP and coins with streak multiplier
+        // 1. Rewards via the shared calculator — the score is clamped to its
+        // per-difficulty ceiling so a tampered score can't mint unbounded
+        // XP/coins, and the completion modal previews these exact numbers.
         const streakMult = getStreakMultiplier(profile.streak.currentStreak);
-        const baseXP = Math.round(result.totalScore * 0.5);
-        const baseCoins = Math.round(result.totalScore * 0.1);
-        let earnedXP = Math.round(baseXP * streakMult);
-        let earnedCoins = Math.round(baseCoins * streakMult);
+        const baseReward = calculateRewards({
+          totalScore: result.totalScore,
+          difficulty: result.difficulty,
+          streakMultiplier: streakMult,
+        });
+        let earnedXP = baseReward.xp;
+        let earnedCoins = baseReward.coins;
 
         // 2. Update stats
         const stats = { ...profile.stats };
@@ -391,9 +483,32 @@ export const useUserStore = create<UserStore>()(
           };
         }
 
-        // Daily challenge
+        // Daily challenge — track completed dates separately so ordinary
+        // puzzles never mark the daily as done, and verify + award the bonus
+        // objective that the UI actually promises.
+        let dailyBonusAwarded: RewardOutcome['dailyBonusAwarded'] = null;
+        const today = kstToday();
+        const prevDailyDates = profile.dailyCompletedDates ?? [];
+        let nextDailyDates = prevDailyDates;
+
         if (result.isDaily) {
-          stats.dailyChallengesCompleted += 1;
+          const firstToday = !prevDailyDates.includes(today);
+          if (firstToday) {
+            stats.dailyChallengesCompleted += 1;
+            nextDailyDates = [...prevDailyDates, today].slice(-400);
+
+            const bonus = getDailyBonus(today);
+            if (checkDailyBonus(bonus, result)) {
+              stats.dailyBonusCompleted = (stats.dailyBonusCompleted ?? 0) + 1;
+              earnedXP += bonus.bonusXP;
+              earnedCoins += bonus.bonusCoins;
+              dailyBonusAwarded = {
+                xp: bonus.bonusXP,
+                coins: bonus.bonusCoins,
+                descriptionKo: bonus.descriptionKo,
+              };
+            }
+          }
         }
 
         // Win rate
@@ -431,6 +546,29 @@ export const useUserStore = create<UserStore>()(
           soundManager.play('achievement');
         }
 
+        // Weekly mission progress (reset when the ISO week changes).
+        const weekId = getWeekId(new Date());
+        const wmPrev =
+          profile.weeklyMissions && profile.weeklyMissions.weekId === weekId
+            ? profile.weeklyMissions
+            : buildWeeklyMissions(weekId);
+        const isHardPlus = ['hard', 'expert', 'master'].includes(result.difficulty);
+        const isPerfect = result.mistakes === 0 && result.hintsUsed === 0;
+        const countedDaily = result.isDaily && !prevDailyDates.includes(today);
+        const updatedMissions = wmPrev.missions.map((m) => {
+          if (m.claimed) return m;
+          let p = m.progress;
+          switch (m.type) {
+            case 'win_hard': if (isHardPlus) p += 1; break;
+            case 'perfect_games': if (isPerfect) p += 1; break;
+            case 'daily_streak': if (countedDaily) p += 1; break;
+            case 'combo_reach': p = Math.max(p, result.maxCombo); break;
+            case 'total_wins': p += 1; break;
+          }
+          return { ...m, progress: p };
+        });
+        const weeklyMissions = { weekId, missions: updatedMissions };
+
         // Calculate new level
         const newTotalXP = profile.totalXP + earnedXP;
         const levelData = calculateLevel(newTotalXP);
@@ -449,10 +587,19 @@ export const useUserStore = create<UserStore>()(
             coins: profile.coins + earnedCoins,
             stats,
             achievements: updatedAchievements,
+            dailyCompletedDates: nextDailyDates,
+            weeklyMissions,
           },
         });
 
-        return newlyUnlocked;
+        return {
+          newlyUnlocked,
+          earnedXP,
+          earnedCoins,
+          leveledUp: didLevelUp,
+          newLevel: levelData.level,
+          dailyBonusAwarded,
+        };
       },
 
       // -------------------------------------------------------------------
@@ -557,8 +704,20 @@ export const useUserStore = create<UserStore>()(
             gameState.undoMistake();
             break;
           case 'streak_freeze':
-            // Streak freeze just adds to the count, handled by streak system
+            // Actually grant a streak-freeze charge so a missed day (gap of 2)
+            // still continues the streak. Previously the item was consumed with
+            // no effect — a paid power-up that did nothing.
+            set((state) => ({
+              profile: {
+                ...state.profile,
+                streak: {
+                  ...state.profile.streak,
+                  streakFreezeCount: state.profile.streak.streakFreezeCount + 1,
+                },
+              },
+            }));
             soundManager.play('powerup');
+            toast('스트릭 보호가 활성화되었습니다! 하루를 건너뛰어도 연속 기록이 유지됩니다.', { icon: '🛡️' });
             break;
         }
 
@@ -622,7 +781,39 @@ export const useUserStore = create<UserStore>()(
     }),
     {
       name: 'numero-quest-user',
+      version: 1,
       storage: createJSONStorage(() => localStorage),
+      // Backfill fields added after a user's profile was first persisted so
+      // older saves don't surface undefined → NaN downstream.
+      migrate: (persisted: unknown) => {
+        const p = persisted as { profile?: Partial<UserProfile> } | undefined;
+        if (!p || !p.profile) return { profile: createDefaultProfile() };
+        const prof = p.profile;
+        return {
+          profile: {
+            ...createDefaultProfile(),
+            ...prof,
+            stats: { ...DEFAULT_STATS, ...(prof.stats ?? {}) },
+            settings: { ...DEFAULT_SETTINGS, ...(prof.settings ?? {}) },
+            streak: { ...DEFAULT_STREAK, ...(prof.streak ?? {}) },
+            dailyCompletedDates: prof.dailyCompletedDates ?? [],
+          },
+        };
+      },
+      merge: (persisted, current) => {
+        const p = persisted as { profile?: Partial<UserProfile> } | undefined;
+        if (!p?.profile) return current;
+        return {
+          ...current,
+          profile: {
+            ...current.profile,
+            ...p.profile,
+            stats: { ...DEFAULT_STATS, ...(p.profile.stats ?? {}) },
+            settings: { ...DEFAULT_SETTINGS, ...(p.profile.settings ?? {}) },
+            streak: { ...DEFAULT_STREAK, ...(p.profile.streak ?? {}) },
+          },
+        };
+      },
       onRehydrateStorage: () => (state) => {
         if (state) {
           soundManager.setEnabled(state.profile.settings.soundEnabled);

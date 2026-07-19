@@ -18,7 +18,8 @@ interface SudokuCellProps {
   isSameBox: boolean;
   isConflict: boolean;
   isErrorHighlight: boolean;
-  notes: number[];
+  /** Sorted, comma-joined notes (stable primitive so React.memo isn't defeated). */
+  notesKey: string;
   theme: GameTheme;
 }
 
@@ -34,10 +35,11 @@ const SudokuCell = memo(function SudokuCell({
   isSameBox,
   isConflict,
   isErrorHighlight,
-  notes,
+  notesKey,
   theme,
 }: SudokuCellProps) {
   const selectCell = useGameStore((s) => s.selectCell);
+  const notes = notesKey ? notesKey.split(',').map(Number) : [];
 
   const handleClick = useCallback(() => {
     selectCell(row, col);
@@ -88,7 +90,13 @@ const SudokuCell = memo(function SudokuCell({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.5, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-            className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold select-none leading-none"
+            className={cn(
+              'text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold select-none leading-none',
+              // Non-color cues (WCAG 1.4.1): given cells are heavier; wrong
+              // entries are underlined so color isn't the only error signal.
+              isGiven ? 'font-black' : 'font-semibold',
+              isConflict && !isGiven && 'underline decoration-2 underline-offset-2',
+            )}
             style={{
               color: isConflict && !isGiven
                 ? '#f87171'

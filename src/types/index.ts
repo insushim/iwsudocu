@@ -39,7 +39,7 @@ export interface Puzzle {
 }
 
 // ===== 게임 상태 =====
-export type GameStatus = 'idle' | 'playing' | 'paused' | 'completed' | 'failed';
+export type GameStatus = 'idle' | 'generating' | 'playing' | 'paused' | 'completed' | 'failed';
 
 export interface GameState {
   puzzle: Puzzle | null;
@@ -72,6 +72,12 @@ export interface GameAction {
   prevNotes?: number[];
   newNotes?: number[];
   timestamp: number;
+  // Progression snapshot BEFORE this action — restored on undo so that
+  // undo→re-place cannot farm combo / erase mistakes / refund hints.
+  prevCombo?: ComboState;
+  prevMaxCombo?: number;
+  prevMistakes?: number;
+  prevHintsUsed?: number;
 }
 
 // ===== 콤보 시스템 =====
@@ -91,6 +97,8 @@ export interface StreakData {
   streakHistory: string[];
   streakFreezeCount: number;
   isStreakActive: boolean;
+  /** Streak lengths whose milestone reward has already been paid (dedup guard). */
+  claimedMilestones?: number[];
 }
 
 // ===== 레벨링 시스템 =====
@@ -251,6 +259,27 @@ export interface UserProfile {
   powerUps: PowerUp[];
   settings: UserSettings;
   createdAt: string;
+  /** Dates (YYYY-MM-DD) on which the daily challenge was actually completed. */
+  dailyCompletedDates?: string[];
+  /** Weekly mission progress, keyed by ISO week id (e.g. "2026-W29"). */
+  weeklyMissions?: WeeklyMissionState;
+}
+
+// ===== 주간 미션 =====
+export interface WeeklyMission {
+  id: string;
+  descriptionKo: string;
+  type: 'win_hard' | 'perfect_games' | 'daily_streak' | 'combo_reach' | 'total_wins';
+  target: number;
+  progress: number;
+  xpReward: number;
+  coinReward: number;
+  claimed: boolean;
+}
+
+export interface WeeklyMissionState {
+  weekId: string;
+  missions: WeeklyMission[];
 }
 
 export interface UserStats {
@@ -270,6 +299,8 @@ export interface UserStats {
   perfectGamesByDifficulty: Record<Difficulty, number>;
   winRate: number;
   brainScore: number;
+  /** Number of daily bonus objectives actually achieved (for daily_bonus_all achievement). */
+  dailyBonusCompleted: number;
 }
 
 export interface UserSettings {

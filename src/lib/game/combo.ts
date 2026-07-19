@@ -56,3 +56,21 @@ export function updateComboOnCorrect(state: ComboState, currentTime: number): Co
 export function resetCombo(): ComboState {
   return createInitialComboState();
 }
+
+/**
+ * Whether the combo has expired, judged by real elapsed time since the last
+ * correct entry rather than by counting timer ticks. This closes the exploit
+ * where backgrounding the tab throttles the tick interval and freezes the
+ * combo window indefinitely.
+ */
+export function isComboExpired(state: ComboState, now: number): boolean {
+  if (state.current <= 0) return false;
+  if (state.lastCorrectTime <= 0) return false;
+  return now - state.lastCorrectTime >= state.maxTime;
+}
+
+/** Remaining combo time in ms, for UI display, based on real elapsed time. */
+export function comboTimeRemaining(state: ComboState, now: number): number {
+  if (state.current <= 0 || state.lastCorrectTime <= 0) return 0;
+  return Math.max(0, state.maxTime - (now - state.lastCorrectTime));
+}

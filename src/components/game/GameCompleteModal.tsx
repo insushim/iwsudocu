@@ -8,6 +8,9 @@ import { cn } from "@/lib/utils/cn";
 import { formatTime, formatNumber } from "@/lib/utils/format";
 import { useGameStore } from "@/lib/store/gameStore";
 import { useUserStore } from "@/lib/store/userStore";
+import { calculateRewards } from "@/lib/game/scoring";
+import { getStreakMultiplier } from "@/lib/game/streak";
+import { validateNickname } from "@/lib/game/profanity";
 
 interface GameCompleteModalProps {
   isOpen: boolean;
@@ -68,11 +71,23 @@ export default function GameCompleteModal({
   const [visibleLines, setVisibleLines] = useState(0);
   const [nickname, setNickname] = useState("");
   const [nameSubmitted, setNameSubmitted] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
   const confettiFired = useRef(false);
   const animationStarted = useRef(false);
   const submitCalledRef = useRef(false);
 
   const result = gameResult();
+  const streakCurrent = useUserStore((s) => s.profile.streak.currentStreak);
+
+  // Preview the exact XP/coins the store will grant (streak multiplier and
+  // per-difficulty clamp included) so the display matches the real payout.
+  const rewardPreview = result
+    ? calculateRewards({
+        totalScore: result.totalScore,
+        difficulty: result.difficulty,
+        streakMultiplier: getStreakMultiplier(streakCurrent),
+      })
+    : { xp: 0, coins: 0 };
 
   // Initialize nickname when modal opens
   useEffect(() => {
@@ -86,6 +101,11 @@ export default function GameCompleteModal({
 
   const handleSubmitName = useCallback(() => {
     if (submitCalledRef.current) return;
+    const check = validateNickname(nickname);
+    if (!check.ok) {
+      setNameError(check.reason ?? "사용할 수 없는 닉네임입니다.");
+      return;
+    }
     submitCalledRef.current = true;
     const finalName = nickname.trim() || "익명";
     useUserStore.getState().setDisplayName(finalName);
@@ -303,13 +323,13 @@ export default function GameCompleteModal({
                   <div className="flex items-center gap-1.5">
                     <Star className="w-4 h-4 text-purple-400" />
                     <span className="text-sm font-semibold text-purple-300 tabular-nums">
-                      +{Math.round(result.totalScore * 0.5)} XP
+                      +{formatNumber(rewardPreview.xp)} XP
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Zap className="w-4 h-4 text-yellow-400" />
                     <span className="text-sm font-semibold text-yellow-300 tabular-nums">
-                      +{Math.round(result.totalScore * 0.1)} 코인
+                      +{formatNumber(rewardPreview.coins)} 코인
                     </span>
                   </div>
                 </div>
@@ -331,7 +351,10 @@ export default function GameCompleteModal({
                   <input
                     type="text"
                     value={nickname}
-                    onChange={(e) => setNickname(e.target.value.slice(0, 20))}
+                    onChange={(e) => {
+                      setNickname(e.target.value.slice(0, 20));
+                      if (nameError) setNameError(null);
+                    }}
                     onKeyDown={(e) => e.key === "Enter" && handleSubmitName()}
                     placeholder="닉네임 입력"
                     maxLength={20}
@@ -358,6 +381,9 @@ export default function GameCompleteModal({
                     <Send className="w-4 h-4" />
                   </button>
                 </div>
+                {nameError && (
+                  <p className="mt-1.5 text-xs text-red-400">{nameError}</p>
+                )}
               </motion.div>
             )}
 

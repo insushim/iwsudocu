@@ -24,9 +24,12 @@ export function calculateTimeBonus(
 
   const target = targetTimes[difficulty];
   const maxTime = target * 2;
-  if (timeInSeconds >= maxTime) return 0;
+  // Guard against a tampered / rewound clock producing a negative elapsed time,
+  // which would otherwise inflate the time bonus above its intended ceiling.
+  const safeTime = Math.max(0, timeInSeconds);
+  if (safeTime >= maxTime) return 0;
 
-  const ratio = Math.max(0, 1 - timeInSeconds / maxTime);
+  const ratio = Math.max(0, 1 - safeTime / maxTime);
   return Math.round(BASE_SCORES[difficulty] * ratio * 1.5);
 }
 
@@ -103,5 +106,48 @@ export function calculateFinalScore(params: {
     mistakePenalty,
     hintPenalty,
     totalScore,
+  };
+}
+
+/**
+ * Theoretical maximum score per difficulty = base + max time bonus (base*1.5)
+ * + max combo bonus (1000) + max perfect bonus (base*0.5), no penalties.
+ * Used to clamp client-supplied scores both locally (reward calc) and on the
+ * leaderboard server, so a tampered localStorage / forged POST cannot mint
+ * unbounded XP, coins, or ranking points.
+ */
+export const MAX_SCORE_BY_DIFFICULTY: Record<Difficulty, number> = {
+  beginner: 1150,
+  easy: 1300,
+  medium: 1600,
+  hard: 2200,
+  expert: 3400,
+  master: 5500,
+};
+
+/** Clamp a (possibly untrusted) score into the valid range for its difficulty. */
+export function clampScore(totalScore: number, difficulty: Difficulty): number {
+  const max = MAX_SCORE_BY_DIFFICULTY[difficulty] ?? MAX_SCORE_BY_DIFFICULTY.medium;
+  if (!Number.isFinite(totalScore)) return 0;
+  return Math.max(0, Math.min(Math.round(totalScore), max));
+}
+
+/**
+ * Single source of truth for converting a game score into XP/coin rewards.
+ * The store recomputes rewards from the clamped score rather than trusting any
+ * externally-supplied figure, and the completion modal previews the exact same
+ * numbers (streak multiplier included) so display == actual payout.
+ */
+export function calculateRewards(params: {
+  totalScore: number;
+  difficulty: Difficulty;
+  streakMultiplier: number;
+}): { xp: number; coins: number } {
+  const clamped = clampScore(params.totalScore, params.difficulty);
+  const baseXP = Math.round(clamped * 0.5);
+  const baseCoins = Math.round(clamped * 0.1);
+  return {
+    xp: Math.round(baseXP * params.streakMultiplier),
+    coins: Math.round(baseCoins * params.streakMultiplier),
   };
 }

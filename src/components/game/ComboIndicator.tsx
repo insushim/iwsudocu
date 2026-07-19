@@ -1,9 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils/cn';
 import { useGameStore } from '@/lib/store/gameStore';
-import { getComboTier, getComboMultiplier } from '@/lib/game/combo';
+import { getComboTier, getComboMultiplier, comboTimeRemaining } from '@/lib/game/combo';
 
 export default function ComboIndicator() {
   const combo = useGameStore((s) => s.combo);
@@ -11,9 +12,20 @@ export default function ComboIndicator() {
   const tier = getComboTier(combo.current);
   const multiplier = getComboMultiplier(combo.current);
 
-  // Timer progress (1 = full, 0 = expired)
-  const timerProgress =
-    combo.maxTime > 0 ? Math.max(0, combo.timer / combo.maxTime) : 0;
+  // Combo expiry is now judged by real elapsed time (performance.now), so the
+  // countdown bar must animate from a rAF loop rather than a per-tick timer.
+  const [timerProgress, setTimerProgress] = useState(1);
+  useEffect(() => {
+    if (combo.current < 3) return;
+    let raf = 0;
+    const update = () => {
+      const remain = comboTimeRemaining(combo, performance.now());
+      setTimerProgress(combo.maxTime > 0 ? Math.max(0, remain / combo.maxTime) : 0);
+      raf = requestAnimationFrame(update);
+    };
+    raf = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(raf);
+  }, [combo]);
 
   return (
     <AnimatePresence>
@@ -62,12 +74,12 @@ export default function ComboIndicator() {
 
           {/* Timer bar */}
           <div className="w-24 h-1 rounded-full bg-white/10 overflow-hidden">
-            <motion.div
+            <div
               className="h-full rounded-full"
-              style={{ backgroundColor: tier.color }}
-              initial={{ width: '100%' }}
-              animate={{ width: `${timerProgress * 100}%` }}
-              transition={{ duration: 0.3, ease: 'linear' }}
+              style={{
+                backgroundColor: tier.color,
+                width: `${timerProgress * 100}%`,
+              }}
             />
           </div>
         </motion.div>

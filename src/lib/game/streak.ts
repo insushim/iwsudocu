@@ -8,6 +8,7 @@ export function createInitialStreakData(): StreakData {
     streakHistory: [],
     streakFreezeCount: 0,
     isStreakActive: false,
+    claimedMilestones: [],
   };
 }
 
@@ -37,7 +38,11 @@ export function updateStreak(data: StreakData, todayStr?: string): StreakData {
     newStreak = 1;
   } else {
     const diff = daysDiff(data.lastPlayDate, today);
-    if (diff === 1) {
+    if (diff <= 0) {
+      // Non-monotonic date (device clock rewound or timezone shift): ignore,
+      // do not reset or advance the streak on a tampered/earlier date.
+      return data;
+    } else if (diff === 1) {
       newStreak = data.currentStreak + 1;
     } else if (diff === 2 && data.streakFreezeCount > 0) {
       newStreak = data.currentStreak + 1;

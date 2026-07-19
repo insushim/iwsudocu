@@ -311,20 +311,20 @@ export default function HelpPage() {
               <div className="mt-2 space-y-1.5 text-xs text-slate-400">
                 <p>
                   1. <strong className="text-white">메모 버튼</strong>을
-                  눌러 파란색으로 활성화
+                  눌러 파란색으로 활성화합니다.
                 </p>
                 <p>
-                  2. <strong className="text-white">빈 칸</strong>을 선택
+                  2. <strong className="text-white">빈 칸</strong>을 선택합니다.
                 </p>
                 <p>
                   3. 후보 <strong className="text-white">숫자들</strong>을
-                  터치하면 작게 표시됨
+                  터치하면 작게 표시됩니다.
                 </p>
                 <p>
-                  4. 다시 터치하면 해당 메모가 사라짐
+                  4. 다시 터치하면 해당 메모가 사라집니다.
                 </p>
                 <p>
-                  5. 정답을 놓으면 같은 행/열/박스의 메모가 자동 정리됨
+                  5. 정답을 채우면 같은 행·열·박스의 메모가 자동으로 정리됩니다.
                 </p>
               </div>
               <div className="flex justify-center mt-3">
@@ -469,7 +469,7 @@ export default function HelpPage() {
               {
                 icon: '🧠',
                 name: '전문가',
-                desc: '빈 칸 56개. Naked Pairs 같은 고급 기법이 필요할 수 있습니다.',
+                desc: '빈 칸 56개. 네이키드 페어(Naked Pairs) 같은 고급 기법이 필요할 수 있습니다.',
                 color: 'text-purple-400',
               },
               {
@@ -524,7 +524,7 @@ export default function HelpPage() {
               <span className="text-cyan-400">💡</span>
               <p>
                 <strong className="text-white">막히면 힌트를 사용하세요.</strong>{' '}
-                3개까지 쓸 수 있고, 힌트가 뚫어주면 연쇄적으로 풀립니다.
+                3개까지 쓸 수 있고, 힌트로 막힌 칸을 뚫으면 연쇄적으로 풀립니다.
               </p>
             </div>
           </div>

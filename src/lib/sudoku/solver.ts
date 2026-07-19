@@ -1,8 +1,28 @@
 import { Board, CellValue } from './types';
 import { isValid } from './generator';
 
+/** Verify that every pre-filled cell is consistent with Sudoku rules. */
+function isBoardConsistent(board: Board): boolean {
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const v = board[r][c];
+      if (v === 0) continue;
+      // Temporarily clear the cell so isValid doesn't see the value as its own conflict.
+      board[r][c] = 0;
+      const ok = isValid(board, r, c, v);
+      board[r][c] = v;
+      if (!ok) return false;
+    }
+  }
+  return true;
+}
+
 export function solve(board: Board): Board | null {
   const b = board.map(row => [...row]) as Board;
+
+  // Reject inconsistent inputs (e.g. duplicate givens) up front so we never
+  // return a board that merely "fills the grid" without being a valid solution.
+  if (!isBoardConsistent(b)) return null;
 
   function backtrack(pos: number): boolean {
     if (pos === 81) return true;
