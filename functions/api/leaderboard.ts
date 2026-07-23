@@ -206,6 +206,28 @@ async function verifySession(
   return true;
 }
 
+// Opportunistic retention sweep: purge rows that are well past their useful
+// life so submission_log and used_tokens don't grow unbounded. Bounds are far
+// wider than the operational windows (rate limit = 60s, token validity = 6h),
+// so a still-needed row can never be removed. Best-effort and non-fatal.
+async function cleanupOldLogs(env: Env): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    await env.DB.prepare('DELETE FROM submission_log WHERE created_at < ?')
+      .bind(now - 3600) // keep 1h (rate-limit window is only 60s)
+      .run();
+  } catch {
+    // ignore — table may not exist yet
+  }
+  try {
+    await env.DB.prepare('DELETE FROM used_tokens WHERE created_at < ?')
+      .bind(now - 24 * 3600) // keep 24h (token validity is only 6h)
+      .run();
+  } catch {
+    // ignore — table may not exist yet
+  }
+}
+
 async function checkRateLimit(env: Env, ipHash: string): Promise<boolean> {
   try {
     const since = Math.floor(Date.now() / 1000) - RATE_LIMIT_WINDOW_SEC;
@@ -283,6 +305,12 @@ async function handlePost(
   const ipHash = await sha256Hex(ip + '|numeroquest');
   const underLimit = await checkRateLimit(context.env, ipHash);
   if (!underLimit) return json({ error: 'Too many submissions, slow down' }, 429);
+
+  // Housekeeping on ~1/16 of writes, after the response — keeps the ephemeral
+  // rate-limit / nonce tables from growing unbounded without added latency.
+  if (ipHash.endsWith('0')) {
+    context.waitUntil(cleanupOldLogs(context.env));
+  }
 
   // --- Sanitize name: strip markup, control + bidi/zero-width chars, fallback ---
   let sanitizedName = body.player_name

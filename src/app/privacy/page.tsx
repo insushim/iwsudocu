@@ -24,7 +24,7 @@ export default function PrivacyPage() {
         </div>
 
         <Card className="space-y-4 text-sm text-slate-300 leading-relaxed">
-          <p className="text-xs text-slate-500">시행일: 2025년 2월 14일 | 최종 수정: 2025년 2월 14일</p>
+          <p className="text-xs text-slate-500">시행일: 2025년 2월 14일 | 최종 수정: 2026년 7월 23일</p>
 
           <section>
             <h3 className="text-white font-semibold mb-1">1. 수집하는 정보</h3>
@@ -38,6 +38,13 @@ export default function PrivacyPage() {
               <strong className="text-slate-200">나. 로컬 저장 데이터</strong><br />
               게임 진행 상황, 설정, 업적, 통계 등은 사용자 기기의 로컬 스토리지에만 저장되며
               외부 서버로 전송되지 않습니다.
+            </p>
+            <p className="mt-2">
+              <strong className="text-slate-200">다. 남용 방지용 기술 정보</strong><br />
+              리더보드 점수 제출 시, 도배·조작을 막기 위해 접속 IP 주소를 복원이 불가능한
+              단방향 해시(SHA-256)로 변환하여 제출 빈도 확인 용도로만 대조합니다.
+              원본 IP 주소는 저장하지 않으며, 해시값은 남용 방지 외의 목적으로 사용되지 않고
+              일정 기간(최대 24시간) 후 자동으로 삭제됩니다.
             </p>
           </section>
 
