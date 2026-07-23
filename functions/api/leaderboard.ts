@@ -53,6 +53,18 @@ const MIN_TIME: Record<string, number> = {
   master: 50,
 };
 
+// Mirror of DIFFICULTY_CONFIGS[*].maxMistakes in src/lib/utils/constants.ts.
+// Server-side ceiling so a forged POST can't register more mistakes (lives)
+// than the difficulty allows. Must stay in sync with the client config.
+const MAX_MISTAKES: Record<string, number> = {
+  beginner: 7,
+  easy: 6,
+  medium: 6,
+  hard: 5,
+  expert: 5,
+  master: 5,
+};
+
 const RATE_LIMIT_WINDOW_SEC = 60;
 const RATE_LIMIT_MAX = 10;
 
@@ -276,7 +288,7 @@ async function handlePost(
   // --- Range / plausibility validation ---
   if (score < 0 || score > (MAX_SCORE[difficulty] ?? 5500)) return json({ error: 'Score out of range' }, 400);
   if (time < (MIN_TIME[difficulty] ?? 20) || time > 24 * 3600) return json({ error: 'Time implausible' }, 400);
-  if (mistakes > 3) return json({ error: 'Invalid mistakes' }, 400);
+  if (mistakes > (MAX_MISTAKES[difficulty] ?? 7)) return json({ error: 'Invalid mistakes' }, 400);
   if (maxCombo > 200) return json({ error: 'Invalid combo' }, 400);
 
   const isDaily = body.is_daily ? 1 : 0;

@@ -23,6 +23,7 @@ import {
   isComboExpired,
 } from '@/lib/game/combo';
 import { soundManager } from '@/lib/audio/soundManager';
+import { DIFFICULTY_CONFIGS } from '@/lib/utils/constants';
 import { hapticLight, hapticMedium, hapticSuccess, hapticError, hapticHeavy } from '@/lib/utils/haptic';
 import { checkCompletions } from '@/lib/game/celebrations';
 import toast from 'react-hot-toast';
@@ -92,7 +93,9 @@ function removeNoteFromPeers(
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_MISTAKES = 3;
+// Fallback lives before a difficulty is chosen. Per-difficulty values live in
+// DIFFICULTY_CONFIGS[difficulty].maxMistakes and are applied when a game starts.
+const MAX_MISTAKES = 5;
 const MAX_HINTS = 3;
 const MAX_HISTORY = 300;
 
@@ -285,6 +288,7 @@ export const useGameStore = create<GameStore>()(
         puzzle: puzzleObj,
         currentBoard: cloneBoard(board),
         difficulty,
+        maxMistakes: DIFFICULTY_CONFIGS[difficulty].maxMistakes,
         status: 'playing',
         startTime: Date.now(),
         runStartPerf: perfNow(),
@@ -335,6 +339,7 @@ export const useGameStore = create<GameStore>()(
         puzzle: puzzleObj,
         currentBoard: cloneBoard(board),
         difficulty: 'medium',
+        maxMistakes: DIFFICULTY_CONFIGS['medium'].maxMistakes,
         status: 'playing',
         startTime: Date.now(),
         runStartPerf: perfNow(),
@@ -1043,7 +1048,8 @@ export const useGameStore = create<GameStore>()(
     set({
       accumulatedMs: elapsedMs,
       elapsedTime: Math.max(0, Math.floor(elapsedMs / 1000)),
-      mistakes: Math.max(0, MAX_MISTAKES - 1),
+      // Restore exactly one life relative to this game's difficulty cap.
+      mistakes: Math.max(0, get().maxMistakes - 1),
       status: 'playing',
       runStartPerf: perfNow(),
       frozenUntilPerf: 0,

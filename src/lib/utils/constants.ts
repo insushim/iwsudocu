@@ -1,12 +1,12 @@
 import { DifficultyConfig, Difficulty, GameTheme } from '@/types';
 
 export const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
-  beginner: { name: 'Beginner', nameKo: '입문', givens: 61, xpMultiplier: 0.5, coinReward: 10, color: '#4CAF50', icon: '🌱', description: '스도쿠를 처음 시작하는 분께 추천' },
-  easy: { name: 'Easy', nameKo: '쉬움', givens: 46, xpMultiplier: 1.0, coinReward: 20, color: '#8BC34A', icon: '🍀', description: '기본 전략으로 풀 수 있어요' },
-  medium: { name: 'Medium', nameKo: '보통', givens: 36, xpMultiplier: 1.5, coinReward: 35, color: '#FF9800', icon: '🔥', description: '중급 전략이 필요해요' },
-  hard: { name: 'Hard', nameKo: '어려움', givens: 29, xpMultiplier: 2.0, coinReward: 60, color: '#F44336', icon: '💪', description: '고급 전략이 필요해요' },
-  expert: { name: 'Expert', nameKo: '전문가', givens: 25, xpMultiplier: 3.0, coinReward: 100, color: '#9C27B0', icon: '🧠', description: '전문가 수준의 논리가 필요해요' },
-  master: { name: 'Master', nameKo: '마스터', givens: 21, xpMultiplier: 5.0, coinReward: 200, color: '#FFD700', icon: '👑', description: '최고 난이도! 도전하세요' },
+  beginner: { name: 'Beginner', nameKo: '입문', givens: 61, xpMultiplier: 0.5, coinReward: 10, color: '#4CAF50', icon: '🌱', description: '스도쿠를 처음 시작하는 분께 추천', maxMistakes: 7 },
+  easy: { name: 'Easy', nameKo: '쉬움', givens: 46, xpMultiplier: 1.0, coinReward: 20, color: '#8BC34A', icon: '🍀', description: '기본 전략으로 풀 수 있어요', maxMistakes: 6 },
+  medium: { name: 'Medium', nameKo: '보통', givens: 36, xpMultiplier: 1.5, coinReward: 35, color: '#FF9800', icon: '🔥', description: '중급 전략이 필요해요', maxMistakes: 6 },
+  hard: { name: 'Hard', nameKo: '어려움', givens: 29, xpMultiplier: 2.0, coinReward: 60, color: '#F44336', icon: '💪', description: '고급 전략이 필요해요', maxMistakes: 5 },
+  expert: { name: 'Expert', nameKo: '전문가', givens: 25, xpMultiplier: 3.0, coinReward: 100, color: '#9C27B0', icon: '🧠', description: '전문가 수준의 논리가 필요해요', maxMistakes: 5 },
+  master: { name: 'Master', nameKo: '마스터', givens: 21, xpMultiplier: 5.0, coinReward: 200, color: '#FFD700', icon: '👑', description: '최고 난이도! 도전하세요', maxMistakes: 5 },
 };
 
 export const GAME_THEMES: GameTheme[] = [

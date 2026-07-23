@@ -27,6 +27,8 @@ export interface DifficultyConfig {
   color: string;
   icon: string;
   description: string;
+  /** Lives (heart count) for this difficulty. Game ends after this many mistakes. */
+  maxMistakes: number;
 }
 
 export interface Puzzle {
