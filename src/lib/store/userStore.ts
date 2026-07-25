@@ -14,13 +14,22 @@ import {
 import { calculateLevel } from '@/lib/game/leveling';
 import { calculateRewards } from '@/lib/game/scoring';
 import { updateStreak, getStreakMultiplier, getStreakMilestoneReward } from '@/lib/game/streak';
-import { getDailyBonus, checkDailyBonus, getWeekId, getWeeklyMissionTemplates, kstToday } from '@/lib/game/daily';
+import {
+  getDailyBonus,
+  checkDailyBonus,
+  getWeekId,
+  getWeeklyMissionTemplates,
+  kstToday,
+  getDailyDealIds,
+  dealPrice,
+} from '@/lib/game/daily';
 import { ALL_ACHIEVEMENTS, checkAchievements } from '@/lib/game/achievements';
 import { calculateBrainScore } from '@/lib/game/brainScore';
 import { soundManager } from '@/lib/audio/soundManager';
 import { bgmManager } from '@/lib/audio/bgmManager';
 import { setHapticEnabled } from '@/lib/utils/haptic';
 import { useGameStore } from '@/lib/store/gameStore';
+import type { Entitlement } from '@/lib/monetization/bridge';
 import toast from 'react-hot-toast';
 
 function buildWeeklyMissions(weekId: string): WeeklyMissionState {
@@ -59,6 +68,7 @@ const DEFAULT_STATS: UserStats = {
   totalMistakes: 0,
   totalHintsUsed: 0,
   maxCombo: 0,
+  maxComboHardPlus: 0,
   dailyChallengesCompleted: 0,
   currentStreak: 0,
   longestStreak: 0,
@@ -103,6 +113,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   darkMode: false,
   language: 'ko',
   numberFirst: false,
+  largeText: false,
 };
 
 const DEFAULT_STREAK: StreakData = {
@@ -189,7 +200,45 @@ function createDefaultPowerUps(): PowerUp[] {
       maxCount: 5,
       effect: 'undo_mistake',
     },
+    {
+      id: 'hint_pack',
+      name: 'Hint Pack',
+      nameKo: '힌트 팩',
+      description: 'Adds 2 hints to the current game',
+      descriptionKo: '현재 게임에 힌트 2회를 추가합니다',
+      icon: '💡',
+      cost: 120,
+      count: 0,
+      maxCount: 5,
+      effect: 'hint_pack',
+    },
+    {
+      id: 'revive_ticket',
+      name: 'Revive Ticket',
+      nameKo: '부활권',
+      description: 'Continue after a game over without spending coins',
+      descriptionKo: '게임 오버 시 코인 없이 이어서 도전합니다',
+      icon: '🎟️',
+      cost: 250,
+      count: 0,
+      maxCount: 3,
+      effect: 'revive_ticket',
+    },
   ];
+}
+
+/**
+ * Merge persisted power-up counts onto the current catalog, keyed by id, so
+ * items added in a later release show up for existing players (and removed ones
+ * disappear) instead of the whole array being replaced by the stale save.
+ */
+function mergePowerUps(persisted: PowerUp[] | undefined): PowerUp[] {
+  const defaults = createDefaultPowerUps();
+  if (!Array.isArray(persisted)) return defaults;
+  return defaults.map((d) => {
+    const prev = persisted.find((p) => p && p.id === d.id);
+    return prev ? { ...d, count: Math.min(Math.max(0, prev.count ?? 0), d.maxCount) } : d;
+  });
 }
 
 function createDefaultAchievements(): Achievement[] {
@@ -217,6 +266,8 @@ function createDefaultProfile(): UserProfile {
     settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date().toISOString(),
     dailyCompletedDates: [],
+    lastFreeReviveDate: '',
+    entitlements: {},
   };
 }
 
@@ -270,6 +321,15 @@ export interface UserStore {
   usePowerUp: (powerUpId: string) => boolean;
   addPowerUp: (powerUpId: string, count: number) => void;
   purchasePowerUp: (powerUpId: string) => boolean;
+
+  // Free daily continue (stands in for the rewarded-ad continue until an ad
+  // unit is configured; with ads available the ad path is offered instead)
+  canUseFreeRevive: () => boolean;
+  consumeFreeRevive: () => boolean;
+
+  // Purchases
+  grantEntitlements: (granted: Entitlement[]) => void;
+  hasEntitlement: (e: Entitlement) => boolean;
 
   // Display name
   setDisplayName: (name: string) => void;
@@ -448,6 +508,10 @@ export const useUserStore = create<UserStore>()(
         stats.totalMistakes += result.mistakes;
         stats.totalHintsUsed += result.hintsUsed;
         stats.maxCombo = Math.max(stats.maxCombo, result.maxCombo);
+        const isHardPlusRun = ['hard', 'expert', 'master'].includes(result.difficulty);
+        if (isHardPlusRun) {
+          stats.maxComboHardPlus = Math.max(stats.maxComboHardPlus ?? 0, result.maxCombo);
+        }
         stats.puzzlesByDifficulty = {
           ...stats.puzzlesByDifficulty,
           [result.difficulty]: stats.puzzlesByDifficulty[result.difficulty] + 1,
@@ -521,6 +585,20 @@ export const useUserStore = create<UserStore>()(
         stats.currentStreak = profile.streak.currentStreak;
         stats.longestStreak = profile.streak.longestStreak;
 
+        // Rolling session log for the weekly report. Capped so localStorage
+        // can't grow without bound on a heavy player.
+        stats.recentSessions = [
+          ...(stats.recentSessions ?? []),
+          {
+            date: today,
+            difficulty: result.difficulty,
+            timeInSeconds: result.timeInSeconds,
+            mistakes: result.mistakes,
+            hintsUsed: result.hintsUsed,
+            score: result.totalScore,
+          },
+        ].slice(-120);
+
         // 3. Recalculate brain score
         stats.brainScore = calculateBrainScore(stats);
 
@@ -552,7 +630,7 @@ export const useUserStore = create<UserStore>()(
           profile.weeklyMissions && profile.weeklyMissions.weekId === weekId
             ? profile.weeklyMissions
             : buildWeeklyMissions(weekId);
-        const isHardPlus = ['hard', 'expert', 'master'].includes(result.difficulty);
+        const isHardPlus = isHardPlusRun;
         const isPerfect = result.mistakes === 0 && result.hintsUsed === 0;
         const countedDaily = result.isDaily && !prevDailyDates.includes(today);
         const updatedMissions = wmPrev.missions.map((m) => {
@@ -657,7 +735,10 @@ export const useUserStore = create<UserStore>()(
 
       setActiveTheme: (themeId: string) => {
         const { profile } = get();
-        if (!profile.unlockedThemes.includes(themeId)) return;
+        const owned =
+          profile.entitlements?.allThemes === true ||
+          profile.unlockedThemes.includes(themeId);
+        if (!owned) return;
 
         set((state) => ({
           profile: {
@@ -675,6 +756,15 @@ export const useUserStore = create<UserStore>()(
         const { profile } = get();
         const powerUp = profile.powerUps.find((p) => p.id === powerUpId);
         if (!powerUp || powerUp.count <= 0) return false;
+
+        // Only consume the item if it can actually take effect right now —
+        // otherwise a mistimed tap burned a paid power-up for nothing.
+        const gameStatus = useGameStore.getState().status;
+        if (powerUpId === 'revive_ticket') {
+          if (gameStatus !== 'failed') return false;
+        } else if (powerUpId !== 'streak_freeze' && gameStatus !== 'playing') {
+          return false;
+        }
 
         set((state) => ({
           profile: {
@@ -702,6 +792,13 @@ export const useUserStore = create<UserStore>()(
             break;
           case 'undo_mistake':
             gameState.undoMistake();
+            break;
+          case 'hint_pack':
+            gameState.grantHints(2);
+            break;
+          case 'revive_ticket':
+            gameState.reviveGame();
+            toast('부활권을 사용했습니다!', { icon: '🎟️' });
             break;
           case 'streak_freeze':
             // Actually grant a streak-freeze charge so a missed day (gap of 2)
@@ -742,12 +839,17 @@ export const useUserStore = create<UserStore>()(
         const powerUp = profile.powerUps.find((p) => p.id === powerUpId);
         if (!powerUp) return false;
         if (powerUp.count >= powerUp.maxCount) return false;
-        if (profile.coins < powerUp.cost) return false;
+
+        // Same deterministic rotation the shop UI renders, so the price charged
+        // always matches the price shown.
+        const dealIds = getDailyDealIds(kstToday(), profile.powerUps.map((p) => p.id));
+        const price = dealIds.includes(powerUpId) ? dealPrice(powerUp.cost) : powerUp.cost;
+        if (profile.coins < price) return false;
 
         set((state) => ({
           profile: {
             ...state.profile,
-            coins: state.profile.coins - powerUp.cost,
+            coins: state.profile.coins - price,
             powerUps: state.profile.powerUps.map((p) =>
               p.id === powerUpId ? { ...p, count: p.count + 1 } : p,
             ),
@@ -756,6 +858,43 @@ export const useUserStore = create<UserStore>()(
 
         soundManager.play('powerup');
         return true;
+      },
+
+      // -------------------------------------------------------------------
+      // Free daily continue
+      // -------------------------------------------------------------------
+
+      canUseFreeRevive: () => get().profile.lastFreeReviveDate !== kstToday(),
+
+      consumeFreeRevive: () => {
+        if (!get().canUseFreeRevive()) return false;
+        set((state) => ({
+          profile: { ...state.profile, lastFreeReviveDate: kstToday() },
+        }));
+        return true;
+      },
+
+      // -------------------------------------------------------------------
+      // Purchases
+      // -------------------------------------------------------------------
+
+      grantEntitlements: (granted: Entitlement[]) => {
+        if (granted.length === 0) return;
+        set((state) => {
+          const next = { ...(state.profile.entitlements ?? {}) };
+          for (const e of granted) {
+            if (e === 'seasonPass') next.seasonPass = getWeekId(new Date());
+            else next[e] = true;
+          }
+          return { profile: { ...state.profile, entitlements: next } };
+        });
+        soundManager.play('powerup');
+      },
+
+      hasEntitlement: (e: Entitlement) => {
+        const ent = get().profile.entitlements ?? {};
+        if (e === 'seasonPass') return ent.seasonPass === getWeekId(new Date());
+        return ent[e] === true;
       },
 
       // -------------------------------------------------------------------
@@ -796,6 +935,7 @@ export const useUserStore = create<UserStore>()(
             stats: { ...DEFAULT_STATS, ...(prof.stats ?? {}) },
             settings: { ...DEFAULT_SETTINGS, ...(prof.settings ?? {}) },
             streak: { ...DEFAULT_STREAK, ...(prof.streak ?? {}) },
+            powerUps: mergePowerUps(prof.powerUps),
             dailyCompletedDates: prof.dailyCompletedDates ?? [],
           },
         };
@@ -811,6 +951,7 @@ export const useUserStore = create<UserStore>()(
             stats: { ...DEFAULT_STATS, ...(p.profile.stats ?? {}) },
             settings: { ...DEFAULT_SETTINGS, ...(p.profile.settings ?? {}) },
             streak: { ...DEFAULT_STREAK, ...(p.profile.streak ?? {}) },
+            powerUps: mergePowerUps(p.profile.powerUps),
           },
         };
       },

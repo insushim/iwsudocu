@@ -5,8 +5,10 @@ import { motion } from 'framer-motion';
 import { Eraser } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { useGameStore } from '@/lib/store/gameStore';
+import { useUserStore } from '@/lib/store/userStore';
 
 export default function NumberPad() {
+  const largeText = useUserStore((s) => s.profile.settings.largeText);
   const placeNumber = useGameStore((s) => s.placeNumber);
   const eraseNumber = useGameStore((s) => s.eraseNumber);
   const highlightedNumber = useGameStore((s) => s.highlightedNumber);
@@ -41,10 +43,13 @@ export default function NumberPad() {
             onClick={() => placeNumber(num)}
             disabled={isDisabled}
             whileTap={{ scale: 0.9 }}
+            aria-label={`숫자 ${num} 입력, ${remaining}개 남음`}
             className={cn(
+              'numpad-digit',
               'flex flex-col items-center justify-center',
               'h-11 sm:h-13 rounded-lg sm:rounded-xl',
-              'font-bold text-base sm:text-xl',
+              'font-bold',
+              largeText ? 'text-2xl sm:text-3xl' : 'text-base sm:text-xl',
               'transition-all duration-150',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
               isActive
@@ -56,7 +61,7 @@ export default function NumberPad() {
             <span>{num}</span>
             <span
               className={cn(
-                'text-[9px] sm:text-xs font-normal leading-none',
+                largeText ? 'text-[11px] sm:text-sm font-normal leading-none' : 'text-[9px] sm:text-xs font-normal leading-none',
                 isActive ? 'text-blue-100' : 'text-white/40',
               )}
             >

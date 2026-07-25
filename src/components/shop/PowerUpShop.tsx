@@ -1,14 +1,21 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Coins } from 'lucide-react';
 import { useUserStore } from '@/lib/store/userStore';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils/cn';
+import { getDailyDealIds, dealPrice, kstToday, DAILY_DEAL_DISCOUNT } from '@/lib/game/daily';
 import toast from 'react-hot-toast';
 
 export function PowerUpShop() {
   const profile = useUserStore((s) => s.profile);
   const purchasePowerUp = useUserStore((s) => s.purchasePowerUp);
+
+  const dealIds = useMemo(
+    () => getDailyDealIds(kstToday(), profile.powerUps.map((p) => p.id)),
+    [profile.powerUps],
+  );
 
   const handleBuy = (powerUpId: string, nameKo: string) => {
     const success = purchasePowerUp(powerUpId);
@@ -21,9 +28,14 @@ export function PowerUpShop() {
 
   return (
     <div className="space-y-2">
+      <p className="px-1 text-[11px] text-slate-500">
+        오늘의 특가 2종 {Math.round(DAILY_DEAL_DISCOUNT * 100)}% 할인 · 매일 자정(KST) 교체
+      </p>
       {profile.powerUps.map((powerUp) => {
+        const onDeal = dealIds.includes(powerUp.id);
+        const price = onDeal ? dealPrice(powerUp.cost) : powerUp.cost;
         const atMax = powerUp.count >= powerUp.maxCount;
-        const canAfford = profile.coins >= powerUp.cost;
+        const canAfford = profile.coins >= price;
         const disabled = atMax || !canAfford;
 
         return (
@@ -45,6 +57,11 @@ export function PowerUpShop() {
                 <span className="text-xs text-slate-500 font-number">
                   {powerUp.count}/{powerUp.maxCount}
                 </span>
+                {onDeal && (
+                  <span className="rounded-md bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">
+                    특가
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400 truncate">
                 {powerUp.descriptionKo}
@@ -63,7 +80,12 @@ export function PowerUpShop() {
               )}
             >
               <Coins className="h-3.5 w-3.5" />
-              <span className="font-number">{powerUp.cost}</span>
+              {onDeal && (
+                <span className="font-number text-[10px] text-white/40 line-through">
+                  {powerUp.cost}
+                </span>
+              )}
+              <span className="font-number">{price}</span>
             </Button>
           </div>
         );

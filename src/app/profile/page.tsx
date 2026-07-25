@@ -7,6 +7,7 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { LevelProgress } from '@/components/profile/LevelProgress';
 import { StatsCard } from '@/components/profile/StatsCard';
 import { BrainScoreChart } from '@/components/profile/BrainScoreChart';
+import { WeeklyReport } from '@/components/profile/WeeklyReport';
 import { StreakCalendar } from '@/components/profile/StreakCalendar';
 import { Button } from '@/components/ui/Button';
 import { useUserStore } from '@/lib/store/userStore';
@@ -38,6 +39,9 @@ export default function ProfilePage() {
 
         {/* Brain score */}
         <BrainScoreChart />
+
+        {/* Weekly training report */}
+        <WeeklyReport />
 
         {/* Stats */}
         <StatsCard />

@@ -91,6 +91,7 @@ const SudokuCell = memo(function SudokuCell({
             exit={{ scale: 0.5, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 500, damping: 25 }}
             className={cn(
+              'sudoku-cell-value',
               'text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold select-none leading-none',
               // Non-color cues (WCAG 1.4.1): given cells are heavier; wrong
               // entries are underlined so color isn't the only error signal.
@@ -118,7 +119,7 @@ const SudokuCell = memo(function SudokuCell({
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
               <span
                 key={n}
-                className="flex items-center justify-center text-[9px] sm:text-[10px] md:text-[11px] font-semibold leading-none select-none"
+                className="sudoku-cell-note flex items-center justify-center text-[9px] sm:text-[10px] md:text-[11px] font-semibold leading-none select-none"
                 style={{
                   color: notes.includes(n)
                     ? '#7DD3FC'

@@ -187,6 +187,7 @@ export interface GameStore {
   freezeTimer: () => void;
   activateComboBoost: () => void;
   undoMistake: () => void;
+  grantHints: (amount: number) => void;
   reviveGame: () => void;
   resetToIdle: () => void;
   getGameResult: () => {
@@ -1035,6 +1036,15 @@ export const useGameStore = create<GameStore>()(
     set({ mistakes: mistakes - 1 });
   },
 
+  grantHints: (amount: number) => {
+    const { status, maxHints } = get();
+    if (status !== 'playing' || amount <= 0) return;
+    soundManager.play('powerup');
+    hapticSuccess();
+    toast(`힌트 ${amount}회가 추가되었습니다!`, { icon: '💡' });
+    set({ maxHints: maxHints + amount });
+  },
+
   reviveGame: () => {
     // Continue a lost game with one mistake slot back. Payment (coins/ad) is
     // handled by the caller; this only restores the playable state.
@@ -1081,7 +1091,13 @@ export const useGameStore = create<GameStore>()(
         accumulatedMs: s.accumulatedMs,
         elapsedTime: s.elapsedTime,
         mistakes: s.mistakes,
+        // Persisted so a reload can't silently change how many lives the run
+        // has (per-difficulty caps would otherwise fall back to MAX_MISTAKES).
+        maxMistakes: s.maxMistakes,
         hintsUsed: s.hintsUsed,
+        // Purchased hint packs raise this above the default — persist it so a
+        // reload doesn't silently revoke what the player paid for.
+        maxHints: s.maxHints,
         difficulty: s.difficulty,
         combo: s.combo,
         maxCombo: s.maxCombo,
@@ -1098,6 +1114,15 @@ export const useGameStore = create<GameStore>()(
         // Resume as paused so the resume dialog appears; reset session clocks.
         if (state.status === 'playing') {
           state.status = 'paused';
+        }
+        // The life cap is a pure function of the difficulty, so derive it here
+        // rather than trusting the merged value: a save written before
+        // maxMistakes was persisted is indistinguishable from a real one after
+        // zustand merges the fallback over it, and would silently resume with
+        // fewer lives than the difficulty grants.
+        const cap = DIFFICULTY_CONFIGS[state.difficulty]?.maxMistakes;
+        if (typeof cap === 'number') {
+          state.maxMistakes = cap;
         }
         // elapsedTime is the persisted source of truth for prior play time; fold
         // it into accumulatedMs so the monotonic clock continues from there

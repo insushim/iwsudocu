@@ -58,3 +58,17 @@
     display: block !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Large-text mode (Settings → 디스플레이 → 큰 글씨 모드).
+   Driven by data-large-text on <html> (see AccessibilitySync) so the preference
+   applies to every surface without threading a prop through the game tree.
+   --------------------------------------------------------------------------- */
+html[data-large-text='true'] .sudoku-cell-value {
+  font-size: clamp(1.5rem, 6vw, 2.5rem);
+  line-height: 1;
+}
+
+html[data-large-text='true'] .sudoku-cell-note {
+  font-size: clamp(0.65rem, 2.2vw, 0.95rem);
+}

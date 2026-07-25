@@ -117,6 +117,11 @@ const SETTING_GROUPS: { title: string; items: SettingItem[] }[] = [
         label: '다크 모드',
         description: '어두운 테마를 사용합니다',
       },
+      {
+        key: 'largeText',
+        label: '큰 글씨 모드',
+        description: '보드와 숫자패드의 글씨를 크게 표시합니다',
+      },
     ],
   },
 ];

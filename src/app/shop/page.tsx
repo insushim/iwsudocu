@@ -6,14 +6,16 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { CoinDisplay } from '@/components/shop/CoinDisplay';
 import { ThemeCard } from '@/components/shop/ThemeCard';
 import { PowerUpShop } from '@/components/shop/PowerUpShop';
+import { PremiumShop } from '@/components/shop/PremiumShop';
 import { GAME_THEMES } from '@/lib/utils/constants';
 import { cn } from '@/lib/utils/cn';
 
-type ShopTab = 'themes' | 'powerups';
+type ShopTab = 'themes' | 'powerups' | 'premium';
 
 const TABS: { key: ShopTab; label: string }[] = [
   { key: 'themes', label: '테마' },
   { key: 'powerups', label: '파워업' },
+  { key: 'premium', label: '스토어' },
 ];
 
 export default function ShopPage() {
@@ -54,8 +56,10 @@ export default function ShopPage() {
               <ThemeCard key={theme.id} theme={theme} />
             ))}
           </div>
-        ) : (
+        ) : activeTab === 'powerups' ? (
           <PowerUpShop />
+        ) : (
+          <PremiumShop />
         )}
       </main>
 

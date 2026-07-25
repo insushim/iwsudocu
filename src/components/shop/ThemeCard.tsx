@@ -46,7 +46,10 @@ export function ThemeCard({ theme }: ThemeCardProps) {
   const unlockTheme = useUserStore((s) => s.unlockTheme);
   const setActiveTheme = useUserStore((s) => s.setActiveTheme);
 
-  const isUnlocked = profile.unlockedThemes.includes(theme.id);
+  // The "all themes" purchase unlocks every theme without touching the
+  // per-theme coin ledger, so a refund/restore can't strand coins.
+  const ownsAllThemes = profile.entitlements?.allThemes === true;
+  const isUnlocked = ownsAllThemes || profile.unlockedThemes.includes(theme.id);
   const isActive = profile.activeTheme === theme.id;
   const canAfford = profile.coins >= theme.cost;
 

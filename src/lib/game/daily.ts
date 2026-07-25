@@ -8,6 +8,19 @@ export function kstToday(): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 
+/** KST date (YYYY-MM-DD) n days before today. */
+export function kstDaysAgo(n: number): string {
+  const d = new Date(Date.now() + 9 * 3600 * 1000 - n * 86400000);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** Milliseconds remaining until the next KST midnight (daily/streak reset). */
+export function msUntilKstMidnight(): number {
+  const kst = new Date(Date.now() + 9 * 3600 * 1000);
+  const nextMidnight = Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1);
+  return nextMidnight - kst.getTime();
+}
+
 export interface DailyBonus {
   type: 'no_mistakes' | 'under_time' | 'no_hints' | 'combo_target';
   descriptionKo: string;
@@ -51,6 +64,35 @@ export function checkDailyBonus(
     default:
       return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Daily shop rotation (coin sink — gives coins somewhere to go every day)
+// ---------------------------------------------------------------------------
+
+/** Discount applied to the items on rotation, as a fraction off the list price. */
+export const DAILY_DEAL_DISCOUNT = 0.3;
+
+/**
+ * Two deterministic item ids on sale for the given KST date. Deterministic so
+ * every client shows the same rotation without a server round-trip.
+ */
+export function getDailyDealIds(dateStr: string, ids: string[]): string[] {
+  if (ids.length <= 2) return [...ids];
+  const seed = parseInt(dateStr.replace(/-/g, ''), 10) || 0;
+  const pool = [...ids];
+  const picked: string[] = [];
+  let s = seed;
+  for (let i = 0; i < 2 && pool.length; i++) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    picked.push(pool.splice(s % pool.length, 1)[0]);
+  }
+  return picked;
+}
+
+/** List price after the daily-deal discount, rounded to a whole coin. */
+export function dealPrice(cost: number): number {
+  return Math.max(1, Math.round(cost * (1 - DAILY_DEAL_DISCOUNT)));
 }
 
 // ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ import { bgmManager } from '@/lib/audio/bgmManager';
 import { DIFFICULTY_CONFIGS } from '@/lib/utils/constants';
 import { formatTime } from '@/lib/utils/format';
 import { kstToday } from '@/lib/game/daily';
+import { isRewardedAdReady, showRewardedAd } from '@/lib/monetization/bridge';
 import toast from 'react-hot-toast';
 import type { Difficulty } from '@/types';
 
@@ -37,6 +38,23 @@ export default function PlayPage() {
   const spendCoins = useUserStore((s) => s.spendCoins);
   const coins = useUserStore((s) => s.profile.coins);
 
+  // Bound to a non-`use*` name: it is a store action, not a React hook.
+  const runPowerUp = useUserStore((s) => s.usePowerUp);
+  const consumeFreeRevive = useUserStore((s) => s.consumeFreeRevive);
+  const hasEntitlement = useUserStore((s) => s.hasEntitlement);
+  const lastFreeReviveDate = useUserStore((s) => s.profile.lastFreeReviveDate);
+  const reviveTickets = useUserStore(
+    (s) => s.profile.powerUps.find((p) => p.id === 'revive_ticket')?.count ?? 0,
+  );
+  const freeReviveAvailable = lastFreeReviveDate !== kstToday();
+
+  // Rewarded ads only exist in a wrapper build with an ad unit configured; on
+  // the web this stays false and the free daily continue is offered instead.
+  const [adReady, setAdReady] = useState(false);
+  useEffect(() => {
+    setAdReady(status === 'failed' && isRewardedAdReady(hasEntitlement('removeAds')));
+  }, [status, hasEntitlement]);
+
   const REVIVE_COST = 150;
   const handleRevive = useCallback(() => {
     if (spendCoins(REVIVE_COST)) {
@@ -46,6 +64,30 @@ export default function PlayPage() {
       toast('코인이 부족합니다.', { icon: '🪙' });
     }
   }, [spendCoins, reviveGame]);
+
+  const handleTicketRevive = useCallback(() => {
+    if (runPowerUp('revive_ticket')) {
+      resultRecorded.current = false;
+    }
+  }, [runPowerUp]);
+
+  const handleFreeRevive = useCallback(() => {
+    if (consumeFreeRevive()) {
+      resultRecorded.current = false;
+      reviveGame();
+      toast('오늘의 무료 이어하기를 사용했습니다.', { icon: '🎁' });
+    }
+  }, [consumeFreeRevive, reviveGame]);
+
+  const handleAdRevive = useCallback(async () => {
+    const watched = await showRewardedAd();
+    if (watched) {
+      resultRecorded.current = false;
+      reviveGame();
+    } else {
+      toast('광고를 끝까지 시청해야 이어할 수 있어요.', { icon: '📺' });
+    }
+  }, [reviveGame]);
 
   // On mount: if game was completed/failed, reset to idle for fresh start
   const [showResumeDialog, setShowResumeDialog] = useState(() => {
@@ -212,7 +254,7 @@ export default function PlayPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-white/50">실수</span>
                   <span className="text-sm font-semibold text-white">
-                    {mistakes} / 3
+                    {mistakes} / {config.maxMistakes}
                   </span>
                 </div>
               </div>
@@ -304,9 +346,29 @@ export default function PlayPage() {
             실수가 너무 많았습니다. 이어서 도전하거나 새로 시작하세요!
           </p>
 
-          {/* Revive: continue this puzzle with one mistake slot back */}
+          {/* Revive paths, cheapest for the player first */}
+          {adReady && (
+            <Button variant="primary" onClick={handleAdRevive} className="w-full">
+              <PlayCircle className="h-4 w-4" />
+              광고 보고 이어하기
+            </Button>
+          )}
+
+          {!adReady && freeReviveAvailable && (
+            <Button variant="primary" onClick={handleFreeRevive} className="w-full">
+              <PlayCircle className="h-4 w-4" />
+              무료 이어하기 (오늘 1회)
+            </Button>
+          )}
+
+          {reviveTickets > 0 && (
+            <Button variant="secondary" onClick={handleTicketRevive} className="w-full">
+              🎟️ 부활권 사용 (보유 {reviveTickets})
+            </Button>
+          )}
+
           <Button
-            variant="primary"
+            variant={adReady || freeReviveAvailable ? 'secondary' : 'primary'}
             onClick={handleRevive}
             className="w-full"
             disabled={coins < REVIVE_COST}

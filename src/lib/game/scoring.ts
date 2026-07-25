@@ -41,13 +41,29 @@ export function calculateHintPenalty(hintsUsed: number): number {
   return hintsUsed * 100;
 }
 
-export function calculateComboBonus(maxCombo: number): number {
-  if (maxCombo < 3) return 0;
-  if (maxCombo < 5) return 50;
-  if (maxCombo < 10) return 150;
-  if (maxCombo < 15) return 300;
-  if (maxCombo < 20) return 500;
-  return 1000;
+/**
+ * Combo bonus as a fraction of the difficulty's base score.
+ *
+ * A flat bonus made combo the dominant term at low difficulty (a Beginner board
+ * has ~20 blanks, so an uninterrupted fill trivially reached the top tier and
+ * paid 20x the base score). Scaling by base score keeps combo a meaningful but
+ * proportionate reward at every difficulty.
+ */
+const COMBO_BONUS_RATIO: { min: number; ratio: number }[] = [
+  { min: 20, ratio: 1.0 },
+  { min: 15, ratio: 0.75 },
+  { min: 10, ratio: 0.5 },
+  { min: 5, ratio: 0.3 },
+  { min: 3, ratio: 0.15 },
+];
+
+export function calculateComboBonus(
+  maxCombo: number,
+  difficulty: Difficulty = 'medium',
+): number {
+  const tier = COMBO_BONUS_RATIO.find((t) => maxCombo >= t.min);
+  if (!tier) return 0;
+  return Math.round(BASE_SCORES[difficulty] * tier.ratio);
 }
 
 export function calculatePerfectBonus(
@@ -83,7 +99,7 @@ export function calculateFinalScore(params: {
 
   const baseScore = BASE_SCORES[difficulty];
   const timeBonus = calculateTimeBonus(difficulty, timeInSeconds);
-  const comboBonus = calculateComboBonus(maxCombo);
+  const comboBonus = calculateComboBonus(maxCombo, difficulty);
   const perfectBonus = calculatePerfectBonus(mistakes, hintsUsed, difficulty);
   const mistakePenalty = calculateMistakePenalty(mistakes);
   const hintPenalty = calculateHintPenalty(hintsUsed);
@@ -110,19 +126,21 @@ export function calculateFinalScore(params: {
 }
 
 /**
- * Theoretical maximum score per difficulty = base + max time bonus (base*1.5)
- * + max combo bonus (1000) + max perfect bonus (base*0.5), no penalties.
- * Used to clamp client-supplied scores both locally (reward calc) and on the
- * leaderboard server, so a tampered localStorage / forged POST cannot mint
- * unbounded XP, coins, or ranking points.
+ * Theoretical maximum score per difficulty = base * 4, i.e. base + max time
+ * bonus (base*1.5) + max combo bonus (base*1.0) + max perfect bonus (base*0.5),
+ * no penalties. Used to clamp client-supplied scores both locally (reward calc)
+ * and on the leaderboard server, so a tampered localStorage / forged POST
+ * cannot mint unbounded XP, coins, or ranking points.
+ *
+ * Keep in sync with MAX_SCORE in functions/api/leaderboard.ts.
  */
 export const MAX_SCORE_BY_DIFFICULTY: Record<Difficulty, number> = {
-  beginner: 1150,
-  easy: 1300,
-  medium: 1600,
-  hard: 2200,
-  expert: 3400,
-  master: 5500,
+  beginner: 200,
+  easy: 400,
+  medium: 800,
+  hard: 1600,
+  expert: 3200,
+  master: 6000,
 };
 
 /** Clamp a (possibly untrusted) score into the valid range for its difficulty. */

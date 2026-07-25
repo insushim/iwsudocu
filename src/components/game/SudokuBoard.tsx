@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { Play } from 'lucide-react';
 import { useGameStore } from '@/lib/store/gameStore';
 import { useUserStore } from '@/lib/store/userStore';
 import { cn } from '@/lib/utils/cn';
@@ -14,6 +15,9 @@ export default function SudokuBoard() {
   const highlightedNumber = useGameStore((s) => s.highlightedNumber);
   const notes = useGameStore((s) => s.notes);
   const errorHighlights = useGameStore((s) => s.errorHighlights);
+  const status = useGameStore((s) => s.status);
+  const resumeGame = useGameStore((s) => s.resumeGame);
+  const isPaused = status === 'paused';
   const highlightSameNumbers = useUserStore((s) => s.profile.settings.highlightSameNumbers);
   const activeThemeId = useUserStore((s) => s.profile.activeTheme);
   const theme = useMemo(() => GAME_THEMES.find((t) => t.id === activeThemeId) ?? GAME_THEMES[0], [activeThemeId]);
@@ -103,18 +107,48 @@ export default function SudokuBoard() {
   }, [currentBoard, givenBoard, selectedCell, highlightedNumber, highlightSameNumbers, conflicts, errorSet, notes, theme]);
 
   return (
-    <div
-      className={cn(
-        'grid grid-cols-9 w-full max-w-[min(100vw-1rem,calc(100dvh-14rem),560px)] aspect-square mx-auto',
-        'rounded-xl border-2 overflow-hidden backdrop-blur-sm shadow-2xl',
+    <div className="relative w-full max-w-[min(100vw-1rem,calc(100dvh-14rem),560px)] aspect-square mx-auto">
+      <div
+        className={cn(
+          'grid grid-cols-9 w-full h-full',
+          'rounded-xl border-2 overflow-hidden backdrop-blur-sm shadow-2xl',
+          // Pausing stops the clock, so the board must be hidden too — otherwise
+          // a run can be studied indefinitely at zero elapsed time and the time
+          // bonus becomes meaningless.
+          isPaused && 'blur-md select-none pointer-events-none',
+        )}
+        style={{
+          backgroundColor: theme.boardBg,
+          borderColor: theme.accentColor + '99',
+          boxShadow: `0 25px 50px -12px ${theme.accentColor}1a`,
+        }}
+        aria-hidden={isPaused}
+      >
+        {cells}
+      </div>
+
+      {isPaused && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 rounded-xl bg-slate-950/75">
+          <p className="text-lg font-bold text-white">일시정지</p>
+          <p className="px-6 text-center text-xs text-white/50">
+            타이머가 멈춰 있습니다. 계속하려면 아래를 누르세요.
+          </p>
+          <button
+            type="button"
+            onClick={resumeGame}
+            className={cn(
+              'flex items-center gap-2 rounded-xl px-5 py-3',
+              'bg-gradient-to-r from-indigo-500 to-purple-600 text-white',
+              'font-semibold shadow-lg shadow-indigo-500/25',
+              'transition-all duration-150 hover:shadow-xl hover:shadow-indigo-500/40',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
+            )}
+          >
+            <Play className="h-4 w-4" />
+            계속하기
+          </button>
+        </div>
       )}
-      style={{
-        backgroundColor: theme.boardBg,
-        borderColor: theme.accentColor + '99',
-        boxShadow: `0 25px 50px -12px ${theme.accentColor}1a`,
-      }}
-    >
-      {cells}
     </div>
   );
 }

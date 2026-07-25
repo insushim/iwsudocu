@@ -14,6 +14,23 @@ export function calculateBrainScore(stats: UserStats): number {
   }
   diffScore = Math.min(300, diffScore + stats.totalGamesWon * 0.5);
 
+  // Speed, accuracy and combo are all trivially maxed on an easy board, so each
+  // is weighted by the hardest difficulty actually cleared. Without this a
+  // single fast, perfect Beginner run scored ~577 (grade A) in 17 seconds.
+  const difficultyFactor: Record<Difficulty, number> = {
+    beginner: 0.2, easy: 0.35, medium: 0.55, hard: 0.75, expert: 0.9, master: 1,
+  };
+  let diffFactor = 0;
+  for (const [diff, count] of Object.entries(stats.puzzlesByDifficulty)) {
+    if (count > 0) {
+      diffFactor = Math.max(diffFactor, difficultyFactor[diff as Difficulty] || 0);
+    }
+  }
+
+  // One perfect game is not evidence of 100% accuracy — ramp the accuracy term
+  // in over the first ten wins instead of paying it out in full immediately.
+  const confidence = Math.min(1, stats.totalGamesWon / 10);
+
   let speedScore = 0;
   const targetTime: Record<string, number> = {
     beginner: 120, easy: 240, medium: 480, hard: 720, expert: 960, master: 1440,
@@ -21,16 +38,17 @@ export function calculateBrainScore(stats: UserStats): number {
   for (const [diff, time] of Object.entries(stats.averageTimes)) {
     if (time > 0) {
       const ratio = Math.max(0, 1 - time / (targetTime[diff] || 600));
-      speedScore = Math.max(speedScore, ratio * 250);
+      speedScore = Math.max(speedScore, ratio * 250 * diffFactor);
     }
   }
 
   const accuracy = stats.totalGamesPlayed > 0
     ? (stats.perfectGames / stats.totalGamesPlayed)
     : 0;
-  const accuracyScore = accuracy * 200;
+  const accuracyScore = accuracy * 200 * diffFactor * confidence;
 
-  const comboScore = Math.min(150, stats.maxCombo * 7.5);
+  // Hard+ only, matching the combo achievements.
+  const comboScore = Math.min(150, (stats.maxComboHardPlus ?? 0) * 7.5);
 
   const consistencyScore = Math.min(99, stats.longestStreak * 2);
 

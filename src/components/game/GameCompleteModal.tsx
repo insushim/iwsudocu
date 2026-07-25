@@ -113,18 +113,11 @@ export default function GameCompleteModal({
     setNameSubmitted(true);
   }, [nickname, onSubmitName]);
 
-  // Auto-submit on close if user didn't submit manually
+  // Closing is NOT consent to publish. Leaving without pressing submit must
+  // never post the run to the public leaderboard on the player's behalf.
   const handleClose = useCallback(() => {
-    if (!submitCalledRef.current && result) {
-      submitCalledRef.current = true;
-      const name =
-        nickname.trim() ||
-        useUserStore.getState().profile.displayName ||
-        "익명";
-      onSubmitName(name === "Player" || name === "플레이어" ? "익명" : name);
-    }
     onClose();
-  }, [nickname, onClose, onSubmitName, result]);
+  }, [onClose]);
 
   // Fire confetti on open
   useEffect(() => {
@@ -345,7 +338,8 @@ export default function GameCompleteModal({
                 className="px-6 pb-4"
               >
                 <label className="block text-xs text-white/50 mb-1.5">
-                  랭킹에 등록할 닉네임
+                  랭킹에 등록할 닉네임{" "}
+                  <span className="text-white/30">(선택 — 등록해야 공개됩니다)</span>
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -400,8 +394,9 @@ export default function GameCompleteModal({
               </motion.div>
             )}
 
-            {/* Action buttons */}
-            {visibleLines >= scoreLines.length && nameSubmitted && (
+            {/* Action buttons — always reachable, with or without a ranking
+                submission, so the modal is never a dead end. */}
+            {visibleLines >= scoreLines.length && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}

@@ -4,6 +4,7 @@ import { Toaster } from "react-hot-toast";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { AppUpdateChecker } from "@/components/AppUpdateChecker";
 import { IOSInstallPrompt } from "@/components/IOSInstallPrompt";
+import { AccessibilitySync } from "@/components/AccessibilitySync";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -68,6 +69,7 @@ export default function RootLayout({
           <ServiceWorkerRegister />
           <AppUpdateChecker />
           <IOSInstallPrompt />
+          <AccessibilitySync />
           {children}
           <Toaster
             position="top-center"

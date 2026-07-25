@@ -34,12 +34,12 @@ function hasProfanity(name: string): boolean {
 // Mirror of MAX_SCORE_BY_DIFFICULTY in src/lib/game/scoring.ts. Server-side
 // ceiling so a forged POST cannot register an impossible score.
 const MAX_SCORE: Record<string, number> = {
-  beginner: 1150,
-  easy: 1300,
-  medium: 1600,
-  hard: 2200,
-  expert: 3400,
-  master: 5500,
+  beginner: 200,
+  easy: 400,
+  medium: 800,
+  hard: 1600,
+  expert: 3200,
+  master: 6000,
 };
 
 // Minimum plausible solve time (seconds) per difficulty — anything faster is
@@ -135,6 +135,24 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 };
 
+/**
+ * Start of the current weekly season (Monday 00:00 KST) as a UTC
+ * "YYYY-MM-DD HH:MM:SS" string, matching SQLite's datetime('now') format.
+ * A rolling season keeps the board reachable for new players instead of being
+ * permanently owned by the earliest submissions.
+ */
+function seasonStartUtc(): string {
+  const kst = new Date(Date.now() + 9 * 3600 * 1000);
+  const mondayOffset = (kst.getUTCDay() + 6) % 7;
+  const kstWeekStart =
+    Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()) -
+    mondayOffset * 86400000;
+  return new Date(kstWeekStart - 9 * 3600 * 1000)
+    .toISOString()
+    .slice(0, 19)
+    .replace('T', ' ');
+}
+
 async function handleGet(
   context: EventContext<Env, string, unknown>,
   cors: Record<string, string>,
@@ -143,27 +161,38 @@ async function handleGet(
   const type = url.searchParams.get('type') || 'all';
   const difficulty = url.searchParams.get('difficulty');
   const dailyDate = url.searchParams.get('date');
+  // "season" = current week only (default for the ranking page), "alltime" = all rows.
+  const period = url.searchParams.get('period') === 'season' ? 'season' : 'alltime';
 
   const rawLimit = parseInt(url.searchParams.get('limit') || '50', 10);
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 50;
 
-  let query = '';
+  const where: string[] = [];
   const params: unknown[] = [];
 
   if (type === 'daily' && dailyDate && /^\d{4}-\d{2}-\d{2}$/.test(dailyDate)) {
-    query = 'SELECT * FROM leaderboard WHERE is_daily = 1 AND daily_date = ? ORDER BY score DESC LIMIT ?';
-    params.push(dailyDate, limit);
+    where.push('is_daily = 1', 'daily_date = ?');
+    params.push(dailyDate);
   } else if (difficulty && DIFFICULTIES.includes(difficulty)) {
-    query = 'SELECT * FROM leaderboard WHERE difficulty = ? ORDER BY score DESC LIMIT ?';
-    params.push(difficulty, limit);
-  } else {
-    query = 'SELECT * FROM leaderboard ORDER BY score DESC LIMIT ?';
-    params.push(limit);
+    where.push('difficulty = ?');
+    params.push(difficulty);
   }
+
+  const seasonStart = seasonStartUtc();
+  if (period === 'season') {
+    where.push('created_at >= ?');
+    params.push(seasonStart);
+  }
+
+  const query =
+    'SELECT * FROM leaderboard' +
+    (where.length ? ` WHERE ${where.join(' AND ')}` : '') +
+    ' ORDER BY score DESC LIMIT ?';
+  params.push(limit);
 
   const result = await context.env.DB.prepare(query).bind(...params).all();
 
-  return new Response(JSON.stringify({ entries: result.results }), {
+  return new Response(JSON.stringify({ entries: result.results, period, seasonStart }), {
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
 }
@@ -286,7 +315,7 @@ async function handlePost(
   const maxCombo = Number.isFinite(body.max_combo) ? Math.max(0, Math.round(body.max_combo)) : 0;
 
   // --- Range / plausibility validation ---
-  if (score < 0 || score > (MAX_SCORE[difficulty] ?? 5500)) return json({ error: 'Score out of range' }, 400);
+  if (score < 0 || score > (MAX_SCORE[difficulty] ?? 6000)) return json({ error: 'Score out of range' }, 400);
   if (time < (MIN_TIME[difficulty] ?? 20) || time > 24 * 3600) return json({ error: 'Time implausible' }, 400);
   if (mistakes > (MAX_MISTAKES[difficulty] ?? 7)) return json({ error: 'Invalid mistakes' }, 400);
   if (maxCombo > 200) return json({ error: 'Invalid combo' }, 400);

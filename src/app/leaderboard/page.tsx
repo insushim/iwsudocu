@@ -27,15 +27,21 @@ function tierFromScore(score: number): PlayerTier {
   return 'bronze';
 }
 
+const PERIOD_TABS: { key: 'season' | 'alltime'; label: string }[] = [
+  { key: 'season', label: '이번 시즌' },
+  { key: 'alltime', label: '역대' },
+];
+
 export default function LeaderboardPage() {
   const [activeDifficulty, setActiveDifficulty] = useState('all');
+  const [activePeriod, setActivePeriod] = useState<'season' | 'alltime'>('season');
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchLeaderboard = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: '50' });
+      const params = new URLSearchParams({ limit: '50', period: activePeriod });
       if (activeDifficulty !== 'all') {
         params.set('difficulty', activeDifficulty);
       }
@@ -61,7 +67,7 @@ export default function LeaderboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeDifficulty]);
+  }, [activeDifficulty, activePeriod]);
 
   useEffect(() => {
     fetchLeaderboard();
@@ -73,6 +79,29 @@ export default function LeaderboardPage() {
 
       <main className="mx-auto max-w-lg space-y-4 px-4 pt-4">
         <h2 className="text-lg font-bold text-white">리더보드</h2>
+
+        {/* Season / all-time */}
+        <div className="flex gap-1.5 rounded-xl bg-white/5 p-1">
+          {PERIOD_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActivePeriod(tab.key)}
+              className={cn(
+                'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+                activePeriod === tab.key
+                  ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25'
+                  : 'text-slate-400 hover:text-white',
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <p className="px-1 text-[11px] text-slate-500">
+          {activePeriod === 'season'
+            ? '시즌은 매주 월요일 0시(KST)에 초기화됩니다.'
+            : '서비스 시작 이후 전체 기록입니다.'}
+        </p>
 
         {/* Difficulty tabs */}
         <div className="flex gap-1 overflow-x-auto rounded-xl bg-white/5 p-1 no-scrollbar">
@@ -97,7 +126,10 @@ export default function LeaderboardPage() {
             <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <LeaderboardTable entries={entries} period={'alltime' as LeaderboardPeriod} />
+          <LeaderboardTable
+            entries={entries}
+            period={(activePeriod === 'season' ? 'weekly' : 'alltime') as LeaderboardPeriod}
+          />
         )}
       </main>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Flame, Brain, Gamepad2, Calendar, Printer, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Flame, Brain, Gamepad2, Calendar, Printer, HelpCircle } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Card } from '@/components/ui/Card';
@@ -10,16 +10,12 @@ import { useUserStore } from '@/lib/store/userStore';
 import { calculateBrainScore, getBrainScoreGrade } from '@/lib/game/brainScore';
 import { WeeklyMissions } from '@/components/missions/WeeklyMissions';
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal';
-import { kstToday } from '@/lib/game/daily';
+import { StreakRiskBanner } from '@/components/home/StreakRiskBanner';
 
 export default function HomePage() {
   const profile = useUserStore((s) => s.profile);
   const brainScore = calculateBrainScore(profile.stats);
   const grade = getBrainScoreGrade(brainScore);
-
-  // Streak at risk: has an active streak but hasn't played today yet (KST).
-  const streakAtRisk =
-    profile.streak.currentStreak > 0 && profile.streak.lastPlayDate !== kstToday();
 
   return (
     <div className="min-h-screen pb-24 pt-16">
@@ -39,24 +35,8 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Streak-at-risk warning */}
-        {streakAtRisk && (
-          <Link href="/play">
-            <Card className="border-orange-500/40 bg-gradient-to-br from-orange-500/15 to-red-500/10">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="h-6 w-6 shrink-0 text-orange-400" />
-                <div>
-                  <p className="text-sm font-bold text-orange-300">
-                    {profile.streak.currentStreak}일 연속 기록이 위험해요!
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    오늘 한 판을 완료하면 연속 기록이 이어집니다.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          </Link>
-        )}
+        {/* Streak-at-risk warning (countdown to the KST reset) */}
+        <StreakRiskBanner />
 
         {/* Daily challenge banner */}
         <Link href="/daily">

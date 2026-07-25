@@ -181,7 +181,9 @@ export type PowerUpEffect =
   | 'freeze_timer'
   | 'combo_boost'
   | 'streak_freeze'
-  | 'undo_mistake';
+  | 'undo_mistake'
+  | 'hint_pack'
+  | 'revive_ticket';
 
 // ===== 테마/커스터마이징 =====
 export interface GameTheme {
@@ -265,6 +267,15 @@ export interface UserProfile {
   dailyCompletedDates?: string[];
   /** Weekly mission progress, keyed by ISO week id (e.g. "2026-W29"). */
   weeklyMissions?: WeeklyMissionState;
+  /** KST date (YYYY-MM-DD) on which the once-a-day free continue was used. */
+  lastFreeReviveDate?: string;
+  /** Owned non-consumable purchases. Empty on the ad-supported free tier. */
+  entitlements?: {
+    removeAds?: boolean;
+    allThemes?: boolean;
+    /** ISO week id the season pass is active for, e.g. "2026-W30". */
+    seasonPass?: string;
+  };
 }
 
 // ===== 주간 미션 =====
@@ -293,6 +304,12 @@ export interface UserStats {
   totalMistakes: number;
   totalHintsUsed: number;
   maxCombo: number;
+  /**
+   * Best combo reached on hard/expert/master only. Combo achievements read this
+   * so an easy board — where an uninterrupted fill is trivial — can't unlock the
+   * whole combo track in a single first session.
+   */
+  maxComboHardPlus: number;
   dailyChallengesCompleted: number;
   currentStreak: number;
   longestStreak: number;
@@ -303,6 +320,19 @@ export interface UserStats {
   brainScore: number;
   /** Number of daily bonus objectives actually achieved (for daily_bonus_all achievement). */
   dailyBonusCompleted: number;
+  /** Rolling log of finished games (newest last, capped) powering the weekly report. */
+  recentSessions?: GameSession[];
+}
+
+/** One completed game, kept only for the local weekly report. */
+export interface GameSession {
+  /** KST date, YYYY-MM-DD. */
+  date: string;
+  difficulty: Difficulty;
+  timeInSeconds: number;
+  mistakes: number;
+  hintsUsed: number;
+  score: number;
 }
 
 export interface UserSettings {
@@ -316,6 +346,8 @@ export interface UserSettings {
   showMistakeCount: boolean;
   darkMode: boolean;
   language: 'ko' | 'en';
+  /** Larger board/number-pad type for younger and older players. */
+  largeText: boolean;
   numberFirst: boolean;
 }
 

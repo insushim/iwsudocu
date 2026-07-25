@@ -20,11 +20,11 @@ export const ALL_ACHIEVEMENTS: Omit<Achievement, 'progress' | 'isUnlocked' | 'un
   { id: 'speed_hard_10m', name: 'Lightning Fast', nameKo: '번개', description: 'Complete Hard under 10 min', descriptionKo: '어려움 난이도를 10분 안에 완료하세요', icon: '⚡', category: 'speed', requirement: 600, xpReward: 800, coinReward: 400, rarity: 'epic' },
   { id: 'speed_expert_15m', name: 'Time Bender', nameKo: '시간을 지배하는 자', description: 'Complete Expert under 15 min', descriptionKo: '전문가 난이도를 15분 안에 완료하세요', icon: '⏱️', category: 'speed', requirement: 900, xpReward: 1500, coinReward: 750, rarity: 'epic' },
   { id: 'speed_master_20m', name: 'Chrono Master', nameKo: '시간의 마스터', description: 'Complete Master under 20 min', descriptionKo: '마스터 난이도를 20분 안에 완료하세요', icon: '🕐', category: 'speed', requirement: 1200, xpReward: 3000, coinReward: 1500, rarity: 'legendary' },
-  { id: 'combo_5', name: 'Combo Starter', nameKo: '콤보 시작', description: 'Get a 5 combo', descriptionKo: '5 콤보를 달성하세요', icon: '🎵', category: 'combo', requirement: 5, xpReward: 100, coinReward: 50, rarity: 'common' },
-  { id: 'combo_10', name: 'Combo King', nameKo: '콤보 킹', description: 'Get a 10 combo', descriptionKo: '10 콤보를 달성하세요', icon: '🎶', category: 'combo', requirement: 10, xpReward: 300, coinReward: 150, rarity: 'rare' },
-  { id: 'combo_15', name: 'Combo Master', nameKo: '콤보 마스터', description: 'Get a 15 combo', descriptionKo: '15 콤보를 달성하세요', icon: '🎸', category: 'combo', requirement: 15, xpReward: 600, coinReward: 300, rarity: 'epic' },
-  { id: 'combo_20', name: 'Unstoppable Combo', nameKo: '멈출 수 없는 콤보', description: 'Get a 20 combo', descriptionKo: '20 콤보를 달성하세요', icon: '💥', category: 'combo', requirement: 20, xpReward: 1000, coinReward: 500, rarity: 'epic' },
-  { id: 'combo_30', name: 'Combo God', nameKo: '콤보의 신', description: 'Get a 30 combo', descriptionKo: '30 콤보를 달성하세요', icon: '🌟', category: 'combo', requirement: 30, xpReward: 3000, coinReward: 1500, rarity: 'legendary' },
+  { id: 'combo_5', name: 'Combo Starter', nameKo: '콤보 시작', description: 'Get a 5 combo on Hard+', descriptionKo: '어려움 이상에서 5 콤보를 달성하세요', icon: '🎵', category: 'combo', requirement: 5, xpReward: 100, coinReward: 50, rarity: 'common' },
+  { id: 'combo_10', name: 'Combo King', nameKo: '콤보 킹', description: 'Get a 10 combo on Hard+', descriptionKo: '어려움 이상에서 10 콤보를 달성하세요', icon: '🎶', category: 'combo', requirement: 10, xpReward: 300, coinReward: 150, rarity: 'rare' },
+  { id: 'combo_15', name: 'Combo Master', nameKo: '콤보 마스터', description: 'Get a 15 combo on Hard+', descriptionKo: '어려움 이상에서 15 콤보를 달성하세요', icon: '🎸', category: 'combo', requirement: 15, xpReward: 600, coinReward: 300, rarity: 'epic' },
+  { id: 'combo_20', name: 'Unstoppable Combo', nameKo: '멈출 수 없는 콤보', description: 'Get a 20 combo on Hard+', descriptionKo: '어려움 이상에서 20 콤보를 달성하세요', icon: '💥', category: 'combo', requirement: 20, xpReward: 1000, coinReward: 500, rarity: 'epic' },
+  { id: 'combo_30', name: 'Combo God', nameKo: '콤보의 신', description: 'Get a 30 combo on Hard+', descriptionKo: '어려움 이상에서 30 콤보를 달성하세요', icon: '🌟', category: 'combo', requirement: 30, xpReward: 3000, coinReward: 1500, rarity: 'legendary' },
   { id: 'perfect_1', name: 'Flawless', nameKo: '완벽', description: 'Complete puzzle with no mistakes', descriptionKo: '실수 없이 퍼즐을 완료하세요', icon: '✨', category: 'perfect', requirement: 1, xpReward: 150, coinReward: 75, rarity: 'common' },
   { id: 'perfect_10', name: 'Perfectionist', nameKo: '완벽주의자', description: '10 perfect games', descriptionKo: '퍼펙트 게임 10회 달성', icon: '💎', category: 'perfect', requirement: 10, xpReward: 500, coinReward: 250, rarity: 'rare' },
   { id: 'perfect_50', name: 'Immaculate', nameKo: '흠 없는', description: '50 perfect games', descriptionKo: '퍼펙트 게임 50회 달성', icon: '👑', category: 'perfect', requirement: 50, xpReward: 1500, coinReward: 750, rarity: 'epic' },
@@ -63,7 +63,8 @@ export function checkAchievements(stats: UserStats, currentAchievements: Achieve
         progress = stats.longestStreak;
         break;
       case 'combo_5': case 'combo_10': case 'combo_15': case 'combo_20': case 'combo_30':
-        progress = stats.maxCombo;
+        // Hard+ only — see UserStats.maxComboHardPlus.
+        progress = stats.maxComboHardPlus ?? 0;
         break;
       case 'speed_easy_3m': case 'speed_medium_5m': case 'speed_hard_10m': case 'speed_expert_15m': case 'speed_master_20m': {
         // Speed achievements unlock when the best time is at or under the
