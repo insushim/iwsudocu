@@ -1,27 +1,17 @@
 import type { CellValue, Board } from './types';
 import { DIFFICULTY_CONFIGS } from '@/lib/utils/constants';
 import type { Difficulty } from '@/types';
+import { ALL_DIGITS, BOX_OF, POPCOUNT, lowestDigit } from './bits';
+import { NEEDS_GUESSING, rateBoard, type TechniqueRating } from './rating';
 
 // ---------------------------------------------------------------------------
 // Bitmask engine
 // ---------------------------------------------------------------------------
-// Digits 1..9 live in bits 0..8. Row/column/box occupancy is tracked in three
-// 9-entry mask tables, so finding a cell's candidates is one OR instead of
-// scanning 27 cells, and the search runs on a flat Uint8Array instead of
-// cloning a 9x9 array-of-arrays on every uniqueness check. That is what makes
-// the retry loop in generatePuzzle affordable.
-
-const ALL_DIGITS = 0x1ff;
-
-const BOX_OF = new Uint8Array(81);
-for (let i = 0; i < 81; i++) {
-  BOX_OF[i] = ((i / 27) | 0) * 3 + (((i % 9) / 3) | 0);
-}
-
-const POPCOUNT = new Uint8Array(512);
-for (let m = 1; m < 512; m++) {
-  POPCOUNT[m] = POPCOUNT[m >> 1] + (m & 1);
-}
+// Row/column/box occupancy is tracked in three 9-entry mask tables, so finding
+// a cell's candidates is one OR instead of scanning 27 cells, and the search
+// runs on a flat Uint8Array instead of cloning a 9x9 array-of-arrays on every
+// uniqueness check. That is what makes the retry loop in generatePuzzle
+// affordable.
 
 // Generation is synchronous and single-threaded, so one set of scratch buffers
 // is reused across calls rather than allocated per call.
@@ -54,11 +44,6 @@ function clearCell(index: number): void {
 
 function candidates(index: number): number {
   return ALL_DIGITS & ~(rowMask[(index / 9) | 0] | colMask[index % 9] | boxMask[BOX_OF[index]]);
-}
-
-/** Lowest set bit of a 9-bit candidate mask, as a 1..9 digit. */
-function lowestDigit(bit: number): number {
-  return 32 - Math.clz32(bit);
 }
 
 // Proving that no *other* digit fits a cell is the only genuinely unbounded
@@ -277,13 +262,106 @@ function targetGivensFor(difficulty: string): number {
 // The attempt cap has to be generous for the same reason — at 120 it, not the
 // clock, was what made 1% of Master boards stop one clue short.
 const GENERATION_BUDGET_MS = 800;
+
+// The clue target is a goal; the band is a requirement. Boards that hit both
+// the Master target (22 clues) and the band are about five times rarer than
+// boards one clue short, and chasing the last clue dominated generation:
+// allowing this much slack took Master from 242 ms to 27 ms at the median and
+// from 800 ms (budget-bound) to 174 ms at p95, with no change to the band
+// guarantees. Master lands at 22-23 clues against Expert's 25-26, so the ladder
+// keeps its gap. Raising it to 2 pushes Master to 24 and crowds Expert.
+const GIVENS_SLACK = 1;
 const MAX_ATTEMPTS = 400;
-const DAILY_ATTEMPTS = 4;
+// The daily has no wall-clock escape hatch (it must be reproducible), so its
+// only budget is this attempt count. It is generous because a date that
+// exhausted it would serve a sub-par board to every player, all day.
+const DAILY_ATTEMPTS = 12;
+
+// ---------------------------------------------------------------------------
+// Difficulty bands
+// ---------------------------------------------------------------------------
+// Selecting on clue count alone produced a ladder that did not hold up: 58% of
+// Hard/Expert/Master boards needed no technique a Beginner lacks, and 13% of
+// all boards could not be finished with the supported technique set at all.
+// Each tier now also has to land inside a technique band.
+//
+// The bands are coarse on purpose. Measured over 180 boards, the rating
+// distribution is bimodal — puzzles cluster at "singles" or jump straight to
+// "needs guessing", and the middle rungs are rare (box-line showed up in 1 of
+// 30 Master boards). Demanding a specific middle rung would mean a ~3%
+// acceptance rate and a generation budget spent on retries, so the bands encode
+// the two distinctions that are both meaningful and reachable: whether a real
+// technique is required at all, and whether the board is solvable without
+// guessing. Separation above Hard stays a matter of clue count.
+interface Band {
+  min: TechniqueRating;
+  max: TechniqueRating;
+}
+
+const DIFFICULTY_BANDS: Record<string, Band> = {
+  // The on-ramp: singles only, so a first-time player is never stuck.
+  beginner: { min: 0, max: 1 },
+  easy: { min: 0, max: 1 },
+  // Anything a human can finish. Also covers the daily puzzle.
+  medium: { min: 0, max: NEEDS_GUESSING - 1 },
+  // Must demand more than singles, and must still be solvable.
+  hard: { min: 2, max: NEEDS_GUESSING - 1 },
+  expert: { min: 2, max: NEEDS_GUESSING - 1 },
+  master: { min: 2, max: NEEDS_GUESSING - 1 },
+};
+
+function bandFor(difficulty: string): Band {
+  return DIFFICULTY_BANDS[difficulty] ?? DIFFICULTY_BANDS.medium;
+}
+
+/**
+ * How well a candidate fits its tier, most important distinction first:
+ * 2 in band, 1 solvable but outside the band, 0 needs guessing. Ranking by this
+ * before clue count means a budget-starved generation degrades to "an easier
+ * board than asked for", never to "a board that cannot be solved".
+ */
+function qualityOf(rating: TechniqueRating, band: Band): number {
+  if (rating >= NEEDS_GUESSING) return 0;
+  if (rating < band.min || rating > band.max) return 1;
+  return 2;
+}
 
 interface Attempt {
   puzzle: Uint8Array;
   solution: Uint8Array;
   givens: number;
+  /** Memoised — rating a board is the expensive half of an attempt. */
+  quality: () => number;
+}
+
+function makeAttempt(
+  puzzle: Uint8Array,
+  solution: Uint8Array,
+  givens: number,
+  band: Band,
+): Attempt {
+  let cached = -1;
+  return {
+    puzzle,
+    solution,
+    givens,
+    quality() {
+      if (cached < 0) cached = qualityOf(rateBoard(puzzle), band);
+      return cached;
+    },
+  };
+}
+
+/** In-band beats out-of-band beats unsolvable; then fewer clues. */
+function isBetter(candidate: Attempt, incumbent: Attempt): boolean {
+  // Rating dominates the cost of an attempt, and most attempts are hopeless:
+  // at the Master target only 1 in 100 digs clears both the clue count and the
+  // band. When the incumbent is already in band and the candidate cannot beat
+  // it on clues, nothing the rating could say would change the outcome — so
+  // never ask. This drops Master from ~98 ratings per puzzle to a handful.
+  if (incumbent.quality() === 2 && candidate.givens >= incumbent.givens) return false;
+  if (candidate.quality() !== incumbent.quality()) return candidate.quality() > incumbent.quality();
+  return candidate.givens < incumbent.givens;
 }
 
 /**
@@ -297,7 +375,13 @@ interface Attempt {
  * Pass `deadline = 0` to drop the clock entirely (the daily puzzle must be
  * reproducible on every device, so timing can never influence it).
  */
-function pickBest(rand: Rng, target: number, maxAttempts: number, deadline: number): Attempt {
+function pickBest(
+  rand: Rng,
+  target: number,
+  maxAttempts: number,
+  deadline: number,
+  band: Band,
+): Attempt {
   // `solution` is snapshotted before digging while `puzzle` is snapshotted after,
   // both from the same shared `grid`. A nested generation between those two
   // reads would hand back a puzzle belonging to a different board — silently,
@@ -313,17 +397,27 @@ function pickBest(rand: Rng, target: number, maxAttempts: number, deadline: numb
   const attemptOnce = (attemptDeadline: number): Attempt => {
     const solution = newSolution(rand);
     const givens = dig(target, shuffledOrder(rand), attemptDeadline);
-    return { puzzle: grid.slice(), solution, givens };
+    return makeAttempt(grid.slice(), solution, givens, band);
   };
+
+  const satisfied = (a: Attempt) => a.givens <= target + GIVENS_SLACK && a.quality() === 2;
 
   try {
     // The first attempt ignores the clock (see the doc comment above).
     let best = attemptOnce(0);
 
-    for (let attempt = 1; attempt < maxAttempts && best.givens > target; attempt++) {
-      if (deadline !== 0 && now() >= deadline) break;
-      const candidate = attemptOnce(deadline);
-      if (candidate.givens < best.givens) best = candidate;
+    for (let attempt = 1; attempt < maxAttempts && !satisfied(best); attempt++) {
+      // While nothing usable has been found, the clock neither ends the search
+      // nor curtails the dig. Both halves matter: handing the player a board no
+      // amount of logic will finish is worse than making them wait (without the
+      // first half, 7 of 20 Master boards went out needing a guess), and a dig
+      // the deadline cut short leaves most clues in place, which then rates as
+      // trivially solvable and beats a real-but-unsolvable candidate on quality
+      // (without the second half, 5 of 20 came back as fully solved grids).
+      const unusable = best.quality() === 0;
+      if (deadline !== 0 && !unusable && now() >= deadline) break;
+      const candidate = attemptOnce(unusable ? 0 : deadline);
+      if (isBetter(candidate, best)) best = candidate;
     }
 
     return best;
@@ -338,6 +432,7 @@ export function generatePuzzle(difficulty: string): { puzzle: Board; solution: B
     targetGivensFor(difficulty),
     MAX_ATTEMPTS,
     now() + GENERATION_BUDGET_MS,
+    bandFor(difficulty),
   );
   return { puzzle: toBoard(best.puzzle), solution: toBoard(best.solution) };
 }
@@ -358,7 +453,13 @@ export function generateDailyPuzzle(dateString: string): { puzzle: Board; soluti
   // driven purely by the seeded RNG: a fixed attempt count and no wall-clock
   // deadline. The daily sits at the medium target, which a single pass reaches
   // essentially always, so the extra attempts are cheap insurance.
-  const best = pickBest(seededRandom, targetGivensFor('medium'), DAILY_ATTEMPTS, 0);
+  const best = pickBest(
+    seededRandom,
+    targetGivensFor('medium'),
+    DAILY_ATTEMPTS,
+    0,
+    bandFor('medium'),
+  );
   return { puzzle: toBoard(best.puzzle), solution: toBoard(best.solution) };
 }
 

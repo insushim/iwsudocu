@@ -1,7 +1,11 @@
 import type { DifficultyConfig, Difficulty, GameTheme } from '@/types';
 
 // `givens` is the generator's target clue count, not a decoration:
-// lib/sudoku/generator reads it directly and retries until it is reached.
+// lib/sudoku/generator reads it directly and retries towards it. It is a goal
+// rather than a guarantee — the generator may settle one clue above it (see
+// GIVENS_SLACK) because the technique band, not the clue count, is what defines
+// a tier. Measured over 360 boards, Master lands at 22-23 and Expert at 25-26.
+//
 // Master sits at 22 rather than 21 because 21-clue grids were only reachable
 // ~40% of the time even when the retry loop was given 1.5 s to hunt for one
 // (measured; the shipped retry budget is 800 ms). Asking for 21 would trade a

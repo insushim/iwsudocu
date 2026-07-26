@@ -21,6 +21,9 @@
 // below needs it.
 import { generatePuzzle } from '@/lib/sudoku/generator';
 import { DIFFICULTY_CONFIGS } from '@/lib/utils/constants';
+import { NEEDS_GUESSING, rateBoard, ratingLabel } from '@/lib/sudoku/rating';
+
+const flatten = (board) => Uint8Array.from(board.flat());
 
 function isValid(board, row, col, num) {
   for (let i = 0; i < 9; i++) {
@@ -522,6 +525,7 @@ let totalSolvedNoHints = 0;
 const ladder = [];
 let singlesOnlyAtHardTier = 0;
 let hardTierTests = 0;
+let raterDisagreements = 0;
 
 for (const difficulty of difficulties) {
   console.log(`\n--- ${difficulty.toUpperCase()} (target ${DIFFICULTY_CONFIGS[difficulty].givens} givens) ---`);
@@ -531,6 +535,7 @@ for (const difficulty of difficulties) {
   const diffGivens = [];
   const diffTechniques = new Set();
   const diffRatings = [];
+  const diffRatingHistogram = {};
 
   for (let i = 0; i < TESTS_PER_DIFFICULTY; i++) {
     totalTests++;
@@ -567,6 +572,20 @@ for (const difficulty of difficulties) {
       singlesOnlyAtHardTier++;
     }
 
+    // Cross-check src/lib/sudoku/rating against this file's independent solver.
+    // They are separate implementations, so agreement is evidence; disagreement
+    // means one of them is wrong and the bands would be built on sand.
+    const rating = rateBoard(flatten(puzzle));
+    diffRatingHistogram[rating] = (diffRatingHistogram[rating] ?? 0) + 1;
+    const raterSaysSolvable = rating < NEEDS_GUESSING;
+    const solverSaysSolvable = result.hintsUsed === 0;
+    if (raterSaysSolvable !== solverSaysSolvable) {
+      raterDisagreements++;
+      console.log(
+        `         RATER DISAGREES: rating=${ratingLabel(rating)} but solver ${solverSaysSolvable ? 'finished without hints' : `needed ${result.hintsUsed} hint(s)`}`,
+      );
+    }
+
     const hintsInfo = result.hintsUsed > 0 ? ` (hints: ${result.hintsUsed}/3)` : ' (no hints needed)';
     console.log(`  [${icon}] #${i+1}: ${result.placed}/${result.emptyCells} cells${hintsInfo} | gen ${genTime}ms, solve ${solveTime}ms`);
     console.log(`         Techniques: ${result.techniquesUsed.join(', ')}`);
@@ -583,6 +602,10 @@ for (const difficulty of difficulties) {
   const spread = `${RATING_LABELS[Math.min(...diffRatings)]} .. ${RATING_LABELS[Math.max(...diffRatings)]}`;
   console.log(`  => ${difficulty}: ${diffSolved}/${TESTS_PER_DIFFICULTY} solved (${diffNoHints} without hints)`);
   console.log(`     givens ${Math.min(...diffGivens)}-${Math.max(...diffGivens)} | hardest: ${hardest} | per-puzzle spread: ${spread}`);
+  const histogram = Object.entries(diffRatingHistogram)
+    .map(([r, n]) => `${ratingLabel(Number(r))}:${n}`)
+    .join(', ');
+  console.log(`     rateBoard histogram: ${histogram}`);
   ladder.push({
     difficulty,
     target: DIFFICULTY_CONFIGS[difficulty].givens,
@@ -605,6 +628,7 @@ for (let i = 0; i < ladder.length; i++) {
 console.log('\n=== FINAL SUMMARY ===');
 console.log(`Needed at least one hint: ${totalTests - totalSolvedNoHints}/${totalTests}`);
 console.log(`Hard+ boards solvable with singles alone: ${singlesOnlyAtHardTier}/${hardTierTests}`);
+console.log(`rateBoard vs independent solver disagreements: ${raterDisagreements}/${totalTests}`);
 console.log(`Total: ${totalSolved}/${totalTests} puzzles human-solvable`);
 console.log(`Without hints: ${totalSolvedNoHints}/${totalTests}`);
 console.log(`With up to 3 hints: ${totalSolved}/${totalTests}`);

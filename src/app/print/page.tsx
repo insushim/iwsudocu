@@ -26,38 +26,39 @@ export default function PrintPage() {
 
   const difficultyConfig = DIFFICULTY_CONFIGS[difficulty];
 
-  const handleGenerate = useCallback(() => {
-    setIsGenerating(true);
-    // Use setTimeout to allow UI to update before heavy computation
-    setTimeout(() => {
-      const newPuzzles: GeneratedPuzzle[] = [];
-      for (let i = 0; i < puzzleCount; i++) {
-        newPuzzles.push(generatePuzzle(difficulty));
-      }
-      setPuzzles(newPuzzles);
-      generatedRef.current = true;
-      setIsGenerating(false);
-    }, 50);
+  // One Master board can take a few hundred milliseconds to generate now that
+  // candidates are also rated against their difficulty band, so a batch of six
+  // is built one board per macrotask. Without the yield the whole batch runs in
+  // a single blocking chunk and the spinner sits frozen for seconds.
+  const generateBatch = useCallback(async () => {
+    const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const newPuzzles: GeneratedPuzzle[] = [];
+    for (let i = 0; i < puzzleCount; i++) {
+      await yieldToBrowser();
+      newPuzzles.push(generatePuzzle(difficulty));
+    }
+    setPuzzles(newPuzzles);
+    generatedRef.current = true;
+    return newPuzzles;
   }, [difficulty, puzzleCount]);
 
+  const handleGenerate = useCallback(() => {
+    setIsGenerating(true);
+    void generateBatch().finally(() => setIsGenerating(false));
+  }, [generateBatch]);
+
   const handlePrint = useCallback(() => {
-    if (puzzles.length === 0) {
-      // Generate first, then print
-      setIsGenerating(true);
-      setTimeout(() => {
-        const newPuzzles: GeneratedPuzzle[] = [];
-        for (let i = 0; i < puzzleCount; i++) {
-          newPuzzles.push(generatePuzzle(difficulty));
-        }
-        setPuzzles(newPuzzles);
-        generatedRef.current = true;
-        setIsGenerating(false);
-        setTimeout(() => window.print(), 100);
-      }, 50);
-    } else {
+    if (puzzles.length > 0) {
       window.print();
+      return;
     }
-  }, [puzzles, puzzleCount, difficulty]);
+    setIsGenerating(true);
+    void generateBatch()
+      .then(() => {
+        setTimeout(() => window.print(), 100);
+      })
+      .finally(() => setIsGenerating(false));
+  }, [puzzles, generateBatch]);
 
   const today = new Date().toLocaleDateString('ko-KR', {
     year: 'numeric',
