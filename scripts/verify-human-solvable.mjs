@@ -19,7 +19,7 @@
 // generator, which meant it happily reported on code that had not shipped for
 // some time. Only isValid is kept locally, because the candidate computation
 // below needs it.
-import { generatePuzzle } from '@/lib/sudoku/generator';
+import { generatePuzzle, DIFFICULTY_BANDS } from '@/lib/sudoku/generator';
 import { DIFFICULTY_CONFIGS } from '@/lib/utils/constants';
 import { NEEDS_GUESSING, rateBoard, ratingLabel } from '@/lib/sudoku/rating';
 
@@ -514,10 +514,14 @@ const TECHNIQUE_ORDER = [
 ];
 const RATING_LABELS = [...TECHNIQUE_ORDER, 'beyond X-Wing'];
 
-// Difficulties whose puzzles arguably should not be solvable with singles
-// alone. The generator does NOT enforce this today — selection is by clue count
-// only — so this is reported, not asserted. See the ladder table it feeds.
-const EXPECT_BEYOND_SINGLES = new Set(['hard', 'expert', 'master']);
+// Derived from the generator's own bands rather than restated here, so the two
+// cannot drift: a band whose floor is above "hidden singles" is a tier that
+// promises more than singles.
+const EXPECT_BEYOND_SINGLES = new Set(
+  Object.entries(DIFFICULTY_BANDS)
+    .filter(([, band]) => band.min > 1)
+    .map(([name]) => name),
+);
 
 let totalTests = 0;
 let totalSolved = 0;

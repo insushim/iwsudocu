@@ -50,7 +50,12 @@ export const PEERS = new Uint8Array(81 * 20);
   }
 }
 
-/** Lowest set bit of a mask, as a 1-based index (bit 0 -> 1, bit 8 -> 9). */
-export function lowestDigit(bit: number): number {
+/**
+ * The 1-based index of a **one-hot** mask (bit 0 -> 1, bit 8 -> 9).
+ *
+ * Callers must have isolated a single bit first (`mask & -mask`, or a popcount
+ * check); given several set bits this returns the highest, not the lowest.
+ */
+export function digitFromBit(bit: number): number {
   return 32 - Math.clz32(bit);
 }

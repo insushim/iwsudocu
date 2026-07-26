@@ -22,29 +22,44 @@ export default function PrintPage() {
   const [puzzleCount, setPuzzleCount] = useState<PuzzleCount>(1);
   const [puzzles, setPuzzles] = useState<GeneratedPuzzle[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const generatedRef = useRef(false);
+  // Identifies the in-flight batch. Selecting a different difficulty or count
+  // mid-batch bumps it, so the older run cannot commit its result on top.
+  const runIdRef = useRef(0);
 
   const difficultyConfig = DIFFICULTY_CONFIGS[difficulty];
+
+  /** Abandons any in-flight batch: its result no longer matches the selection. */
+  const cancelBatch = useCallback(() => {
+    runIdRef.current++;
+    setIsGenerating(false);
+  }, []);
 
   // One Master board can take a few hundred milliseconds to generate now that
   // candidates are also rated against their difficulty band, so a batch of six
   // is built one board per macrotask. Without the yield the whole batch runs in
   // a single blocking chunk and the spinner sits frozen for seconds.
   const generateBatch = useCallback(async () => {
+    const runId = ++runIdRef.current;
     const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0));
     const newPuzzles: GeneratedPuzzle[] = [];
     for (let i = 0; i < puzzleCount; i++) {
       await yieldToBrowser();
+      // Yielding between boards keeps the page responsive, which also means the
+      // player can change difficulty or count while this runs. Bail rather than
+      // finish a batch nobody asked for any more.
+      if (runIdRef.current !== runId) return null;
       newPuzzles.push(generatePuzzle(difficulty));
     }
+    if (runIdRef.current !== runId) return null;
     setPuzzles(newPuzzles);
-    generatedRef.current = true;
     return newPuzzles;
   }, [difficulty, puzzleCount]);
 
   const handleGenerate = useCallback(() => {
     setIsGenerating(true);
-    void generateBatch().finally(() => setIsGenerating(false));
+    void generateBatch().then((result) => {
+      if (result) setIsGenerating(false);
+    });
   }, [generateBatch]);
 
   const handlePrint = useCallback(() => {
@@ -53,11 +68,11 @@ export default function PrintPage() {
       return;
     }
     setIsGenerating(true);
-    void generateBatch()
-      .then(() => {
-        setTimeout(() => window.print(), 100);
-      })
-      .finally(() => setIsGenerating(false));
+    void generateBatch().then((result) => {
+      if (!result) return; // superseded by a newer batch, which owns the spinner
+      setIsGenerating(false);
+      setTimeout(() => window.print(), 100);
+    });
   }, [puzzles, generateBatch]);
 
   const today = new Date().toLocaleDateString('ko-KR', {
@@ -226,6 +241,7 @@ export default function PrintPage() {
                     onClick={() => {
                       setDifficulty(d);
                       setPuzzles([]);
+                      cancelBatch();
                     }}
                     className={`
                       rounded-xl px-3 py-3 text-center transition-all duration-200 border-2
@@ -267,6 +283,7 @@ export default function PrintPage() {
                     onClick={() => {
                       setPuzzleCount(count);
                       setPuzzles([]);
+                      cancelBatch();
                     }}
                     className={`
                       rounded-xl px-3 py-3 text-center transition-all duration-200 border-2

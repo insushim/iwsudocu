@@ -1,4 +1,4 @@
-import { ALL_DIGITS, BOX_OF, PEERS, POPCOUNT, UNITS, lowestDigit } from './bits';
+import { ALL_DIGITS, BOX_OF, PEERS, POPCOUNT, UNITS, digitFromBit } from './bits';
 
 /**
  * Difficulty rating for a puzzle, expressed as the hardest technique a solver
@@ -8,14 +8,15 @@ import { ALL_DIGITS, BOX_OF, PEERS, POPCOUNT, UNITS, lowestDigit } from './bits'
  * band. See DIFFICULTY_BANDS in ./generator.
  *
  * Cheapest first; the order is also the order the solver applies them, so a
- * puzzle's rating is the deepest rung it ever has to use.
+ * puzzle's rating is the deepest rung it ever has to use. Indices are a public
+ * contract — DIFFICULTY_BANDS in ./generator is written in terms of them.
  */
 export const TECHNIQUES = [
   'naked singles',
   'hidden singles',
+  'box-line',
   'naked pairs',
   'naked triples',
-  'box-line',
   'x-wing',
 ] as const;
 
@@ -53,7 +54,7 @@ export function rateBoard(cells: Uint8Array): TechniqueRating {
   }
 
   function assign(index: number, bit: number): void {
-    board[index] = lowestDigit(bit);
+    board[index] = digitFromBit(bit);
     cand[index] = 0;
     for (let p = 0; p < 20; p++) cand[PEERS[index * 20 + p]] &= ~bit;
     empty--;
@@ -117,6 +118,10 @@ export function rateBoard(cells: Uint8Array): TechniqueRating {
   /**
    * `size` cells in a unit whose candidates together span exactly `size`
    * digits: those digits cannot live anywhere else in the unit.
+   *
+   * The guard below is `<` and not `<=`: a unit holding exactly `size`
+   * constrained cells is the textbook shape of the pattern, not a case to skip.
+   * Getting that wrong rated 34% of Hard+ boards harder than they are.
    */
   function nakedSubsets(size: 2 | 3): boolean {
     let changed = false;
@@ -128,7 +133,7 @@ export function rateBoard(cells: Uint8Array): TechniqueRating {
         const i = UNITS[u * 9 + k];
         if (board[i] === 0 && POPCOUNT[cand[i]] >= 2 && POPCOUNT[cand[i]] <= size) cells.push(i);
       }
-      if (cells.length <= size) continue;
+      if (cells.length < size) continue;
 
       const prune = (union: number, a: number, b: number, c: number) => {
         for (let k = 0; k < 9; k++) {
@@ -180,7 +185,7 @@ export function rateBoard(cells: Uint8Array): TechniqueRating {
         if (count < 2) continue;
 
         if (POPCOUNT[rows] === 1) {
-          const r = lowestDigit(rows) - 1;
+          const r = digitFromBit(rows) - 1;
           for (let c = 0; c < 9; c++) {
             const i = r * 9 + c;
             if (BOX_OF[i] === b || board[i] !== 0 || (cand[i] & bit) === 0) continue;
@@ -189,7 +194,7 @@ export function rateBoard(cells: Uint8Array): TechniqueRating {
           }
         }
         if (POPCOUNT[cols] === 1) {
-          const c = lowestDigit(cols) - 1;
+          const c = digitFromBit(cols) - 1;
           for (let r = 0; r < 9; r++) {
             const i = r * 9 + c;
             if (BOX_OF[i] === b || board[i] !== 0 || (cand[i] & bit) === 0) continue;
@@ -213,7 +218,7 @@ export function rateBoard(cells: Uint8Array): TechniqueRating {
         }
         if (count < 2 || POPCOUNT[boxes] !== 1) continue;
 
-        const b = lowestDigit(boxes) - 1;
+        const b = digitFromBit(boxes) - 1;
         for (let k = 0; k < 9; k++) {
           const i = UNITS[(18 + b) * 9 + k];
           const inSourceUnit = u < 9 ? ((i / 9) | 0) === u : i % 9 === u - 9;
@@ -273,12 +278,16 @@ export function rateBoard(cells: Uint8Array): TechniqueRating {
     return changed;
   }
 
+  // Cheapest first, and the order is the rating scale: locked candidates
+  // (pointing / box-line reduction) sit below the naked subsets, matching how
+  // the common references — Hodoku, SudokuWiki — rank them for a human solver.
+  // Getting this order wrong would invert tiers whose floors sit on it.
   const steps: (() => boolean)[] = [
     nakedSingles,
     hiddenSingles,
+    boxLine,
     () => nakedSubsets(2),
     () => nakedSubsets(3),
-    boxLine,
     xWing,
   ];
 

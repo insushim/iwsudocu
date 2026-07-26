@@ -1,7 +1,7 @@
 import type { CellValue, Board } from './types';
 import { DIFFICULTY_CONFIGS } from '@/lib/utils/constants';
 import type { Difficulty } from '@/types';
-import { ALL_DIGITS, BOX_OF, POPCOUNT, lowestDigit } from './bits';
+import { ALL_DIGITS, BOX_OF, POPCOUNT, digitFromBit } from './bits';
 import { NEEDS_GUESSING, rateBoard, type TechniqueRating } from './rating';
 
 // ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ function countSolutions(limit: number): number {
   while (mask !== 0) {
     const bit = mask & -mask;
     mask ^= bit;
-    place(bestCell, lowestDigit(bit));
+    place(bestCell, digitFromBit(bit));
     found += countSolutions(limit - found);
     clearCell(bestCell);
     if (found >= limit) break;
@@ -130,7 +130,7 @@ function fillSolution(rand: Rng): boolean {
   while (mask !== 0) {
     const bit = mask & -mask;
     mask ^= bit;
-    digits.push(lowestDigit(bit));
+    digits.push(digitFromBit(bit));
   }
   for (let k = digits.length - 1; k > 0; k--) {
     const j = (rand() * (k + 1)) | 0;
@@ -195,7 +195,7 @@ function dig(targetGivens: number, order: Uint8Array, deadline: number): number 
     while (mask !== 0) {
       const bit = mask & -mask;
       mask ^= bit;
-      const digit = lowestDigit(bit);
+      const digit = digitFromBit(bit);
       if (digit === value) continue;
       place(index, digit);
       const solvable = countSolutions(1) > 0;
@@ -271,6 +271,9 @@ const GENERATION_BUDGET_MS = 800;
 // guarantees. Master lands at 22-23 clues against Expert's 25-26, so the ladder
 // keeps its gap. Raising it to 2 pushes Master to 24 and crowds Expert.
 const GIVENS_SLACK = 1;
+
+// Tries allowed to the "just give me something solvable" fallback in pickBest.
+const FALLBACK_ATTEMPTS = 8;
 const MAX_ATTEMPTS = 400;
 // The daily has no wall-clock escape hatch (it must be reproducible), so its
 // only budget is this attempt count. It is generous because a date that
@@ -283,35 +286,36 @@ const DAILY_ATTEMPTS = 12;
 // Selecting on clue count alone produced a ladder that did not hold up: 58% of
 // Hard/Expert/Master boards needed no technique a Beginner lacks, and 13% of
 // all boards could not be finished with the supported technique set at all.
-// Each tier now also has to land inside a technique band.
+// Each tier now also has to land inside a technique band, so the ladder is
+// graded by what the player has to *know*, not only by how much is missing.
 //
-// The bands are coarse on purpose. Measured over 180 boards, the rating
-// distribution is bimodal — puzzles cluster at "singles" or jump straight to
-// "needs guessing", and the middle rungs are rare (box-line showed up in 1 of
-// 30 Master boards). Demanding a specific middle rung would mean a ~3%
-// acceptance rate and a generation budget spent on retries, so the bands encode
-// the two distinctions that are both meaningful and reachable: whether a real
-// technique is required at all, and whether the board is solvable without
-// guessing. Separation above Hard stays a matter of clue count.
+// Bands are indices into TECHNIQUES (see ./rating), which is ordered the way
+// the common references rank the techniques for a human solver.
 interface Band {
   min: TechniqueRating;
   max: TechniqueRating;
 }
 
-const DIFFICULTY_BANDS: Record<string, Band> = {
+export const DIFFICULTY_BANDS: Record<Difficulty, Band> = {
   // The on-ramp: singles only, so a first-time player is never stuck.
   beginner: { min: 0, max: 1 },
   easy: { min: 0, max: 1 },
   // Anything a human can finish. Also covers the daily puzzle.
   medium: { min: 0, max: NEEDS_GUESSING - 1 },
-  // Must demand more than singles, and must still be solvable.
+  // Each of the top three demands a strictly deeper technique than the one
+  // below, and none of them may need a guess. Master is the expensive one:
+  // deep-technique boards are rare at 22 clues, so it costs p50 91 ms / p95
+  // 257 ms over 200 runs where Hard costs 1 ms (node; a browser is ~1.5x).
+  // That buys a real distinction — 53 of 60 Master boards need a naked triple,
+  // where Hard is box-line-dominated. Relaxing Master to `min: 3` would bring
+  // it back under ~30 ms, if the wait ever matters more than the ladder.
   hard: { min: 2, max: NEEDS_GUESSING - 1 },
-  expert: { min: 2, max: NEEDS_GUESSING - 1 },
-  master: { min: 2, max: NEEDS_GUESSING - 1 },
+  expert: { min: 3, max: NEEDS_GUESSING - 1 },
+  master: { min: 4, max: NEEDS_GUESSING - 1 },
 };
 
 function bandFor(difficulty: string): Band {
-  return DIFFICULTY_BANDS[difficulty] ?? DIFFICULTY_BANDS.medium;
+  return DIFFICULTY_BANDS[difficulty as Difficulty] ?? DIFFICULTY_BANDS.medium;
 }
 
 /**
@@ -346,7 +350,13 @@ function makeAttempt(
     solution,
     givens,
     quality() {
-      if (cached < 0) cached = qualityOf(rateBoard(puzzle), band);
+      if (cached < 0) {
+        // A dig that removed nothing is not a puzzle. Left to rateBoard a full
+        // grid comes back as "naked singles" (there is nothing to deduce), which
+        // lands inside the Beginner/Easy band and would beat a real board on
+        // quality — so rule it out before the rating is ever consulted.
+        cached = givens >= 81 ? 0 : qualityOf(rateBoard(puzzle), band);
+      }
       return cached;
     },
   };
@@ -394,9 +404,9 @@ function pickBest(
   }
   generating = true;
 
-  const attemptOnce = (attemptDeadline: number): Attempt => {
+  const attemptOnce = (attemptDeadline: number, digTarget = target): Attempt => {
     const solution = newSolution(rand);
-    const givens = dig(target, shuffledOrder(rand), attemptDeadline);
+    const givens = dig(digTarget, shuffledOrder(rand), attemptDeadline);
     return makeAttempt(grid.slice(), solution, givens, band);
   };
 
@@ -418,6 +428,16 @@ function pickBest(
       if (deadline !== 0 && !unusable && now() >= deadline) break;
       const candidate = attemptOnce(unusable ? 0 : deadline);
       if (isBetter(candidate, best)) best = candidate;
+    }
+
+    // Last resort. The loop above is bounded by maxAttempts, so "keep digging
+    // until something is solvable" is a strong tendency, not a guarantee — with
+    // the RNG pinned to a constant an adversary can walk it to the cap. Back off
+    // to a clue count where being solvable is near-certain: an easier board than
+    // the tier promises is a disappointment, an unsolvable one is a bug report.
+    for (let i = 0; i < FALLBACK_ATTEMPTS && best.quality() === 0; i++) {
+      const relaxed = attemptOnce(0, Math.max(target, targetGivensFor('medium')));
+      if (relaxed.quality() > 0) best = relaxed;
     }
 
     return best;
