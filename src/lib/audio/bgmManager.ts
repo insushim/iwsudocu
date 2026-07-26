@@ -204,17 +204,10 @@ class BgmManager {
   // -------------------------------------------------------------------
 
   private cleanupStoppedNodes() {
-    // Remove ended oscillators from tracking arrays
-    this.activeOscillators = this.activeOscillators.filter((o) => {
-      try {
-        // If the oscillator context time has passed its stop time it is dead.
-        // We just keep a bounded list; old refs get GC'd.
-        return true;
-      } catch {
-        return false;
-      }
-    });
-    // Keep arrays bounded
+    // There is no way to ask an OscillatorNode whether it has finished, so the
+    // lists are simply kept bounded and stale refs are left to the GC once the
+    // slice drops them. (A filter used to sit here that returned true for every
+    // node — it allocated a new array on every call and dropped nothing.)
     if (this.activeOscillators.length > 60) {
       this.activeOscillators = this.activeOscillators.slice(-30);
     }

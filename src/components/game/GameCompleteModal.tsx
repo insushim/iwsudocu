@@ -33,20 +33,21 @@ function AnimatedCounter({
   target: number;
   duration?: number;
 }) {
-  const [current, setCurrent] = useState(0);
+  const [animated, setAnimated] = useState(0);
+
+  // Nothing to count up to when the target is zero or negative, so show it
+  // outright instead of having the effect set state on the first render.
+  const current = target <= 0 ? target : animated;
 
   useEffect(() => {
-    if (target <= 0) {
-      setCurrent(target);
-      return;
-    }
+    if (target <= 0) return;
     const startTime = Date.now();
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
       // Ease out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
-      setCurrent(Math.round(target * eased));
+      setAnimated(Math.round(target * eased));
       if (progress >= 1) clearInterval(interval);
     }, 16);
     return () => clearInterval(interval);
@@ -65,7 +66,6 @@ export default function GameCompleteModal({
   const gameResult = useGameStore((s) => s.getGameResult);
   const elapsedTime = useGameStore((s) => s.elapsedTime);
   const mistakes = useGameStore((s) => s.mistakes);
-  const hintsUsed = useGameStore((s) => s.hintsUsed);
   const maxCombo = useGameStore((s) => s.maxCombo);
 
   const [visibleLines, setVisibleLines] = useState(0);
@@ -176,7 +176,6 @@ export default function GameCompleteModal({
     for (let i = 1; i <= NUM_LINES; i++) {
       setTimeout(() => setVisibleLines(i), 500 + i * 200);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const handleNewGame = useCallback(() => {

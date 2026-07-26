@@ -1,11 +1,29 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Grid3x3, Pencil, Flame } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
+import { useHydrated } from '@/hooks/useHydrated';
 
 const STORAGE_KEY = 'nq-onboarded-v1';
+
+// Read once and remember: localStorage is only written by finish() below, so a
+// module-level cache keeps this stable across renders and lets the component
+// derive `open` while rendering instead of setting state from an effect.
+let seenBefore: boolean | null = null;
+
+function hasSeenOnboarding(): boolean {
+  if (seenBefore === null) {
+    try {
+      seenBefore = localStorage.getItem(STORAGE_KEY) !== null;
+    } catch {
+      // Storage unavailable (private mode, blocked cookies) — don't nag.
+      seenBefore = true;
+    }
+  }
+  return seenBefore;
+}
 
 const STEPS = [
   {
@@ -26,16 +44,11 @@ const STEPS = [
 ];
 
 export function OnboardingModal() {
-  const [open, setOpen] = useState(false);
+  const hydrated = useHydrated();
+  const [dismissed, setDismissed] = useState(false);
   const [step, setStep] = useState(0);
 
-  useEffect(() => {
-    try {
-      if (!localStorage.getItem(STORAGE_KEY)) setOpen(true);
-    } catch {
-      /* storage unavailable */
-    }
-  }, []);
+  const open = hydrated && !dismissed && !hasSeenOnboarding();
 
   const finish = () => {
     try {
@@ -43,7 +56,8 @@ export function OnboardingModal() {
     } catch {
       /* ignore */
     }
-    setOpen(false);
+    seenBefore = true;
+    setDismissed(true);
   };
 
   const next = () => {

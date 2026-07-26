@@ -7,7 +7,7 @@
  * This script copies the nested files to the flat path format that the client expects.
  */
 import { readdirSync, statSync, copyFileSync, existsSync } from 'fs';
-import { join, basename } from 'path';
+import { join } from 'path';
 
 const outDir = join(process.cwd(), 'out');
 

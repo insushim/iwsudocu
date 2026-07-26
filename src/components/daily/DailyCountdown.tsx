@@ -1,22 +1,46 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useSyncExternalStore } from 'react';
 import { Clock } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { msUntilKstMidnight } from '@/lib/game/daily';
 
-function getTimeUntilMidnight(): { hours: number; minutes: number; seconds: number } {
-  const now = new Date();
-  const midnight = new Date(now);
-  midnight.setHours(24, 0, 0, 0);
+interface Countdown {
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
 
-  const diff = midnight.getTime() - now.getTime();
-  const totalSeconds = Math.max(0, Math.floor(diff / 1000));
+const ZERO: Countdown = { hours: 0, minutes: 0, seconds: 0 };
 
-  return {
-    hours: Math.floor(totalSeconds / 3600),
-    minutes: Math.floor((totalSeconds % 3600) / 60),
-    seconds: totalSeconds % 60,
-  };
+// The daily puzzle rolls over at KST midnight regardless of where the player
+// is, so the countdown has to track that instant — not the device's own
+// midnight, which was off by the timezone offset for everyone outside Korea.
+function subscribe(onChange: () => void): () => void {
+  const interval = setInterval(onChange, 1000);
+  return () => clearInterval(interval);
+}
+
+// useSyncExternalStore compares snapshots by identity, so a fresh object every
+// call would re-render forever. Cache and only rebuild when the second ticks.
+let cachedSeconds = -1;
+let cached: Countdown = ZERO;
+
+function getSnapshot(): Countdown {
+  const totalSeconds = Math.max(0, Math.floor(msUntilKstMidnight() / 1000));
+  if (totalSeconds !== cachedSeconds) {
+    cachedSeconds = totalSeconds;
+    cached = {
+      hours: Math.floor(totalSeconds / 3600),
+      minutes: Math.floor((totalSeconds % 3600) / 60),
+      seconds: totalSeconds % 60,
+    };
+  }
+  return cached;
+}
+
+function getServerSnapshot(): Countdown {
+  return ZERO;
 }
 
 function pad(n: number): string {
@@ -24,16 +48,7 @@ function pad(n: number): string {
 }
 
 export function DailyCountdown() {
-  const [time, setTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
-
-  useEffect(() => {
-    setTime(getTimeUntilMidnight());
-    const interval = setInterval(() => {
-      setTime(getTimeUntilMidnight());
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
+  const time = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   return (
     <Card className="flex items-center justify-between">

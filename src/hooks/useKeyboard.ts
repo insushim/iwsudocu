@@ -11,7 +11,9 @@ export function useKeyboard() {
   const toggleNotesMode = useGameStore((state) => state.toggleNotesMode);
   const undo = useGameStore((state) => state.undo);
   const redo = useGameStore((state) => state.redo);
-  const useHint = useGameStore((state) => state.useHint);
+  // Bound to a non-`use*` name: it is a store action, not a React hook, and the
+  // hooks lint rule goes by the name alone.
+  const requestHint = useGameStore((state) => state.useHint);
   const isNotesMode = useGameStore((state) => state.isNotesMode);
   const status = useGameStore((state) => state.status);
 
@@ -94,7 +96,7 @@ export function useKeyboard() {
       // H key: hint
       if ((e.key === 'h' || e.key === 'H') && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        useHint();
+        requestHint();
         return;
       }
     };
@@ -103,5 +105,5 @@ export function useKeyboard() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [status, isNotesMode, selectedCell, placeNumber, eraseNumber, selectCell, toggleNotesMode, undo, redo, useHint]);
+  }, [status, isNotesMode, selectedCell, placeNumber, eraseNumber, selectCell, toggleNotesMode, undo, redo, requestHint]);
 }

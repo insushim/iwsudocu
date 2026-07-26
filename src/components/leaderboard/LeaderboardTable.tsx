@@ -18,11 +18,18 @@ export function LeaderboardTable({
   currentUserId,
 }: LeaderboardTableProps) {
   if (entries.length === 0) {
+    // The season board empties every Monday, so "no records yet" would read as
+    // a bug there — say which board is empty.
+    const isSeason = period === 'season';
     return (
       <div className="flex flex-col items-center justify-center py-12 text-slate-500">
         <span className="text-4xl mb-2">🏆</span>
-        <p className="text-sm">아직 기록이 없습니다</p>
-        <p className="text-xs">첫 번째 기록을 남겨보세요!</p>
+        <p className="text-sm">
+          {isSeason ? '이번 시즌 기록이 아직 없습니다' : '아직 기록이 없습니다'}
+        </p>
+        <p className="text-xs">
+          {isSeason ? '지금 등록하면 시즌 1위입니다!' : '첫 번째 기록을 남겨보세요!'}
+        </p>
       </div>
     );
   }
