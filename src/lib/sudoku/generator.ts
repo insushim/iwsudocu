@@ -1,4 +1,4 @@
-import { CellValue, Board } from './types';
+import type { CellValue, Board } from './types';
 import { DIFFICULTY_CONFIGS } from '@/lib/utils/constants';
 import type { Difficulty } from '@/types';
 
@@ -310,16 +310,20 @@ function pickBest(rand: Rng, target: number, maxAttempts: number, deadline: numb
   }
   generating = true;
 
+  const attemptOnce = (attemptDeadline: number): Attempt => {
+    const solution = newSolution(rand);
+    const givens = dig(target, shuffledOrder(rand), attemptDeadline);
+    return { puzzle: grid.slice(), solution, givens };
+  };
+
   try {
-    let solution = newSolution(rand);
-    let givens = dig(target, shuffledOrder(rand), 0);
-    let best: Attempt = { puzzle: grid.slice(), solution, givens };
+    // The first attempt ignores the clock (see the doc comment above).
+    let best = attemptOnce(0);
 
     for (let attempt = 1; attempt < maxAttempts && best.givens > target; attempt++) {
       if (deadline !== 0 && now() >= deadline) break;
-      solution = newSolution(rand);
-      givens = dig(target, shuffledOrder(rand), deadline);
-      if (givens < best.givens) best = { puzzle: grid.slice(), solution, givens };
+      const candidate = attemptOnce(deadline);
+      if (candidate.givens < best.givens) best = candidate;
     }
 
     return best;

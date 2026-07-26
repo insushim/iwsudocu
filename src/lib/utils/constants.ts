@@ -1,4 +1,4 @@
-import { DifficultyConfig, Difficulty, GameTheme } from '@/types';
+import type { DifficultyConfig, Difficulty, GameTheme } from '@/types';
 
 // `givens` is the generator's target clue count, not a decoration:
 // lib/sudoku/generator reads it directly and retries until it is reached.

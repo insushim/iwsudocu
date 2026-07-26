@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build && node scripts/fix-rsc-paths.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify:puzzles": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/ts-alias-hook.mjs scripts/verify-human-solvable.mjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

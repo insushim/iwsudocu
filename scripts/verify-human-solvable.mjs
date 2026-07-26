@@ -14,80 +14,26 @@
  */
 
 // --- Sudoku core ---
-function createEmptyBoard() {
-  return Array.from({ length: 9 }, () => Array(9).fill(0));
-}
-
-function shuffle(array) {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
+// The puzzles under test come from the real generator, imported through
+// scripts/ts-alias-hook.mjs. This file used to keep its own copy of the
+// generator, which meant it happily reported on code that had not shipped for
+// some time. Only isValid is kept locally, because the candidate computation
+// below needs it.
+import { generatePuzzle } from '@/lib/sudoku/generator';
+import { DIFFICULTY_CONFIGS } from '@/lib/utils/constants';
 
 function isValid(board, row, col, num) {
-  for (let c = 0; c < 9; c++) if (board[row][c] === num) return false;
-  for (let r = 0; r < 9; r++) if (board[r][col] === num) return false;
-  const br = Math.floor(row / 3) * 3, bc = Math.floor(col / 3) * 3;
-  for (let r = br; r < br + 3; r++)
-    for (let c = bc; c < bc + 3; c++)
+  for (let i = 0; i < 9; i++) {
+    if (board[row][i] === num || board[i][col] === num) return false;
+  }
+  const br = Math.floor(row / 3) * 3;
+  const bc = Math.floor(col / 3) * 3;
+  for (let r = br; r < br + 3; r++) {
+    for (let c = bc; c < bc + 3; c++) {
       if (board[r][c] === num) return false;
+    }
+  }
   return true;
-}
-
-function generateSolvedBoard() {
-  const board = createEmptyBoard();
-  function fill(pos) {
-    if (pos === 81) return true;
-    const r = Math.floor(pos / 9), c = pos % 9;
-    for (const n of shuffle([1,2,3,4,5,6,7,8,9])) {
-      if (isValid(board, r, c, n)) {
-        board[r][c] = n;
-        if (fill(pos + 1)) return true;
-        board[r][c] = 0;
-      }
-    }
-    return false;
-  }
-  fill(0);
-  return board;
-}
-
-function countSolutions(board, limit = 2) {
-  let count = 0;
-  const b = board.map(r => [...r]);
-  function solve(pos) {
-    if (count >= limit) return;
-    if (pos === 81) { count++; return; }
-    const r = Math.floor(pos / 9), c = pos % 9;
-    if (b[r][c] !== 0) { solve(pos + 1); return; }
-    for (let n = 1; n <= 9; n++) {
-      if (count >= limit) return;
-      if (isValid(b, r, c, n)) { b[r][c] = n; solve(pos + 1); b[r][c] = 0; }
-    }
-  }
-  solve(0);
-  return count;
-}
-
-const DIFFICULTY_REMOVALS = { beginner: 20, easy: 35, medium: 45, hard: 52, expert: 56, master: 60 };
-
-function generatePuzzle(difficulty) {
-  const solution = generateSolvedBoard();
-  const puzzle = solution.map(r => [...r]);
-  const removals = DIFFICULTY_REMOVALS[difficulty] || 45;
-  const positions = shuffle(Array.from({ length: 81 }, (_, i) => ({ row: Math.floor(i / 9), col: i % 9 })));
-  let removed = 0;
-  for (const { row, col } of positions) {
-    if (removed >= removals) break;
-    const backup = puzzle[row][col];
-    puzzle[row][col] = 0;
-    if (countSolutions(puzzle) === 1) removed++;
-    else puzzle[row][col] = backup;
-  }
-  return { puzzle, solution, removed };
 }
 
 // --- Candidate computation ---
@@ -112,6 +58,23 @@ function getBoxCells(boxRow, boxCol) {
     for (let c = boxCol; c < boxCol + 3; c++)
       cells.push([r, c]);
   return cells;
+}
+
+/**
+ * Independent check of the generator's own technique floor: can this board be
+ * finished with singles alone? Written here from the script's own technique
+ * primitives rather than shared with src/, so a bug in the generator's copy
+ * cannot hide behind the same bug in the checker.
+ */
+function solvableWithSinglesOnly(board) {
+  const b = board.map((row) => [...row]);
+  for (;;) {
+    const cands = computeCandidates(b);
+    let placed = nakedSingles(b, cands);
+    if (placed === 0) placed = hiddenSingles(b, cands);
+    if (placed === 0) break;
+  }
+  return b.every((row) => row.every((v) => v !== 0));
 }
 
 // --- Human techniques ---
@@ -530,28 +493,52 @@ function solveWithHumanTechniques(board, solution, maxHints = 3) {
 // --- Main ---
 
 const difficulties = ['beginner', 'easy', 'medium', 'hard', 'expert', 'master'];
-const TESTS_PER_DIFFICULTY = 5;
+const TESTS_PER_DIFFICULTY = Number(process.env.TESTS_PER_DIFFICULTY ?? 5);
 
 console.log('=== Human-Solvability Verification ===');
 console.log(`Testing ${TESTS_PER_DIFFICULTY} puzzles x ${difficulties.length} difficulties`);
 console.log(`Techniques: Naked/Hidden Singles, Naked Pairs/Triples, Pointing Pairs, Box-Line, X-Wing`);
 console.log(`Fallback: Up to 3 game hints (reveals cell with fewest candidates)\n`);
 
+// Cheapest first — the last one a difficulty needs is its real rating.
+const TECHNIQUE_ORDER = [
+  'Naked Singles',
+  'Hidden Singles',
+  'Naked Pairs',
+  'Naked Triples',
+  'Pointing/Box-Line',
+  'X-Wing',
+];
+const RATING_LABELS = [...TECHNIQUE_ORDER, 'beyond X-Wing'];
+
+// Difficulties whose puzzles arguably should not be solvable with singles
+// alone. The generator does NOT enforce this today — selection is by clue count
+// only — so this is reported, not asserted. See the ladder table it feeds.
+const EXPECT_BEYOND_SINGLES = new Set(['hard', 'expert', 'master']);
+
 let totalTests = 0;
 let totalSolved = 0;
 let totalSolvedNoHints = 0;
+const ladder = [];
+let singlesOnlyAtHardTier = 0;
+let hardTierTests = 0;
 
 for (const difficulty of difficulties) {
-  console.log(`\n--- ${difficulty.toUpperCase()} (${DIFFICULTY_REMOVALS[difficulty]} removals) ---`);
+  console.log(`\n--- ${difficulty.toUpperCase()} (target ${DIFFICULTY_CONFIGS[difficulty].givens} givens) ---`);
 
   let diffSolved = 0;
   let diffNoHints = 0;
+  const diffGivens = [];
+  const diffTechniques = new Set();
+  const diffRatings = [];
 
   for (let i = 0; i < TESTS_PER_DIFFICULTY; i++) {
     totalTests++;
     const start = Date.now();
     const { puzzle, solution } = generatePuzzle(difficulty);
     const genTime = Date.now() - start;
+    diffGivens.push(puzzle.flat().filter((v) => v !== 0).length);
+    if (EXPECT_BEYOND_SINGLES.has(difficulty)) hardTierTests++;
 
     const solveStart = Date.now();
     const result = solveWithHumanTechniques(puzzle, solution, 3);
@@ -564,18 +551,60 @@ for (const difficulty of difficulties) {
       if (result.hintsUsed === 0) { totalSolvedNoHints++; diffNoHints++; }
     }
 
+    for (const t of result.techniquesUsed) diffTechniques.add(t);
+
+    // Rating of this single puzzle = the deepest technique it forced. A puzzle
+    // the solver could only finish with a hint is *harder* than the techniques
+    // it happened to use before getting stuck, so it rates above the whole set —
+    // scoring it by those techniques would make it look easy.
+    diffRatings.push(
+      result.hintsUsed > 0
+        ? TECHNIQUE_ORDER.length
+        : Math.max(0, ...result.techniquesUsed.map((t) => TECHNIQUE_ORDER.indexOf(t)).filter((i) => i >= 0)),
+    );
+
+    if (EXPECT_BEYOND_SINGLES.has(difficulty) && solvableWithSinglesOnly(puzzle)) {
+      singlesOnlyAtHardTier++;
+    }
+
     const hintsInfo = result.hintsUsed > 0 ? ` (hints: ${result.hintsUsed}/3)` : ' (no hints needed)';
-    console.log(`  [${icon}] #${i+1}: ${result.placed}/${result.emptyCells} cells${hintsInfo} | ${solveTime}ms`);
+    console.log(`  [${icon}] #${i+1}: ${result.placed}/${result.emptyCells} cells${hintsInfo} | gen ${genTime}ms, solve ${solveTime}ms`);
     console.log(`         Techniques: ${result.techniquesUsed.join(', ')}`);
     if (!result.solved) {
       console.log(`         STUCK: ${result.remaining} cells remaining`);
     }
   }
 
+  // The hardest technique a difficulty demands is what the player actually
+  // feels — clue count alone says very little, since 61 and 46 givens are both
+  // pure singles work.
+  const hardest = [...TECHNIQUE_ORDER].reverse().find((t) => diffTechniques.has(t)) ?? 'none';
+  const median = [...diffRatings].sort((a, b) => a - b)[Math.floor(diffRatings.length / 2)];
+  const spread = `${RATING_LABELS[Math.min(...diffRatings)]} .. ${RATING_LABELS[Math.max(...diffRatings)]}`;
   console.log(`  => ${difficulty}: ${diffSolved}/${TESTS_PER_DIFFICULTY} solved (${diffNoHints} without hints)`);
+  console.log(`     givens ${Math.min(...diffGivens)}-${Math.max(...diffGivens)} | hardest: ${hardest} | per-puzzle spread: ${spread}`);
+  ladder.push({
+    difficulty,
+    target: DIFFICULTY_CONFIGS[difficulty].givens,
+    hardest,
+    median: RATING_LABELS[median],
+    spread,
+  });
+}
+
+console.log('\n=== DIFFICULTY LADDER ===');
+console.log('difficulty | givens | step | median technique   | per-puzzle spread');
+for (let i = 0; i < ladder.length; i++) {
+  const step = i === 0 ? '' : `-${ladder[i - 1].target - ladder[i].target}`;
+  console.log(
+    `${ladder[i].difficulty.padEnd(10)} | ${String(ladder[i].target).padStart(6)} | ${step.padStart(4)} | ` +
+      `${ladder[i].median.padEnd(18)} | ${ladder[i].spread}`,
+  );
 }
 
 console.log('\n=== FINAL SUMMARY ===');
+console.log(`Needed at least one hint: ${totalTests - totalSolvedNoHints}/${totalTests}`);
+console.log(`Hard+ boards solvable with singles alone: ${singlesOnlyAtHardTier}/${hardTierTests}`);
 console.log(`Total: ${totalSolved}/${totalTests} puzzles human-solvable`);
 console.log(`Without hints: ${totalSolvedNoHints}/${totalTests}`);
 console.log(`With up to 3 hints: ${totalSolved}/${totalTests}`);
