@@ -255,21 +255,26 @@ function targetGivensFor(difficulty: string): number {
 // freeze; when the budget runs out we ship the best attempt so far, which is
 // always a valid, uniquely-solvable puzzle. The clock is checked once per dug
 // cell and each cell's work is capped by SEARCH_NODE_LIMIT, so the overshoot
-// past the budget is bounded too — it is a real ceiling, not a hint.
+// past the budget is bounded too — it is a real ceiling, not a hint: re-run
+// against a 200 ms budget, the worst block over 200 Master runs was 201 ms.
 //
-// Measured on the hardest target (Master, 22 givens): p50 9 ms, p99 56 ms, max
-// 82 ms over 200 runs, i.e. the budget is headroom rather than the common path.
-// The attempt cap has to be generous for the same reason — at 120 it, not the
-// clock, was what made 1% of Master boards stop one clue short.
+// Grading the tiers by technique (see DIFFICULTY_BANDS) made the hardest target
+// rarer, and so more expensive. Master now blocks for p50 ~100 ms and p95
+// ~280 ms (two samples of 200 runs: 89/270 and 105/289, max 330); every other
+// tier is under 10 ms at p95. What ends the search at p95 is MAX_ATTEMPTS, not
+// this clock — the budget only starts binding on a device around 4x slower,
+// where it holds the block to ~800 ms.
 const GENERATION_BUDGET_MS = 800;
 
 // The clue target is a goal; the band is a requirement. Boards that hit both
-// the Master target (22 clues) and the band are about five times rarer than
-// boards one clue short, and chasing the last clue dominated generation:
-// allowing this much slack took Master from 242 ms to 27 ms at the median and
-// from 800 ms (budget-bound) to 174 ms at p95, with no change to the band
-// guarantees. Master lands at 22-23 clues against Expert's 25-26, so the ladder
-// keeps its gap. Raising it to 2 pushes Master to 24 and crowds Expert.
+// the Master target (22 clues) and the band are much rarer than boards one clue
+// short, and chasing the last clue dominates the median — though not the tail.
+// Re-measured against the graded bands, 200 runs each: dropping the slack to 0
+// takes Master from p50 105 ms to p50 252 ms while p95 barely moves (289 vs
+// 282 ms, both ended by MAX_ATTEMPTS rather than the clock). What the slack
+// costs is tightness, not the band: 22-clue boards fall from 39% to 14%. Master
+// still lands at 22-23 against Expert's 25-26, so the ladder keeps its gap.
+// Raising it to 2 pushes Master to 24 and crowds Expert.
 const GIVENS_SLACK = 1;
 
 // Tries allowed to the "just give me something solvable" fallback in pickBest.

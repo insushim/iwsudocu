@@ -297,7 +297,8 @@ export default function PlayPage() {
     );
   }
 
-  // Generating: puzzle is being created off the main thread
+  // Generating: the board is being built. Deliberately no controls here — the
+  // build blocks the main thread (see scheduleGeneration in gameStore).
   if (status === 'generating') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 pt-16">

@@ -111,8 +111,16 @@ function appendHistory(history: GameAction[], historyIndex: number, action: Game
 // ---------------------------------------------------------------------------
 // A true Web Worker isn't reliable under Next's static (output: export) +
 // Turbopack build — the worker ships as raw TS and fails to load. Instead we
-// paint the "generating" spinner first, then run generation on the next frame
-// so the UI isn't visibly frozen while expert/master puzzles are built.
+// paint the "generating" spinner first, then generate on the next frame.
+//
+// Generation still runs on the main thread and blocks it. Only Master is worth
+// noting — p50 ~100 ms, p95 ~280 ms here, held under ~800 ms on much slower
+// hardware by GENERATION_BUDGET_MS; every other tier is under 10 ms. That is
+// left as-is deliberately: this screen has no controls to press, and the
+// spinner animates `transform` only, which the compositor keeps ticking while
+// the main thread is busy. If either stops being true, chunk pickBest's retry
+// loop rather than the whole call — Master is ~135 attempts of ~0.5 ms, so it
+// slices finely.
 
 let genRequestId = 0;
 
